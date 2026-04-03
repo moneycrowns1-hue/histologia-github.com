@@ -1,6 +1,7 @@
-import { catalog } from '../slides/slides.js'
+import { getCatalog } from '../slides/slides.js'
 
 function fromHotspots() {
+  const catalog = getCatalog()
   const slides = catalog.flatMap((c) => c.items)
   const cards = []
 
@@ -24,6 +25,15 @@ function fromHotspots() {
   return cards
 }
 
-export const decks = catalog.map((c) => ({ id: c.id, title: c.title }))
+export function getDecks() {
+  const catalog = getCatalog()
+  return catalog.map((c) => ({ id: c.id, title: c.title }))
+}
 
-export const cards = fromHotspots()
+export function getCards() {
+  return fromHotspots()
+}
+
+export const decks = getDecks()
+
+export const cards = getCards()

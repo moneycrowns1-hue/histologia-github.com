@@ -13,8 +13,6 @@ function getLocalOverrides() {
   }
 }
 
-const localOverrides = getLocalOverrides()
-
 function getLocalSlides() {
   try {
     if (typeof window === 'undefined') return []
@@ -28,9 +26,7 @@ function getLocalSlides() {
   }
 }
 
-const localSlides = getLocalSlides()
-
-function applyOverrides(item) {
+function applyOverrides(item, localOverrides) {
   const o = overrides?.[item.id]
   const lo = localOverrides?.[item.id]
   if (!o && !lo) return item
@@ -169,6 +165,40 @@ const baseSlides = [
   }
 ]
 
-export const slides = [...baseSlides, ...localSlides].map(applyOverrides)
+export function getSlides() {
+  const localOverrides = getLocalOverrides()
+  const localSlides = getLocalSlides()
 
-export const catalog = buildCatalog(slides)
+  const map = new Map()
+  for (const s of baseSlides) map.set(s.id, s)
+  for (const s of localSlides) map.set(s.id, s)
+  return Array.from(map.values()).map((s) => applyOverrides(s, localOverrides))
+}
+
+export function getCatalog() {
+  return buildCatalog(getSlides())
+}
+
+export function subscribeSlides(onChange) {
+  if (typeof window === 'undefined') return () => {}
+
+  const handler = () => {
+    try {
+      onChange?.()
+    } catch {
+      // ignore
+    }
+  }
+
+  window.addEventListener('storage', handler)
+  window.addEventListener('microlab:slides-updated', handler)
+
+  return () => {
+    window.removeEventListener('storage', handler)
+    window.removeEventListener('microlab:slides-updated', handler)
+  }
+}
+
+export const slides = getSlides()
+
+export const catalog = getCatalog()

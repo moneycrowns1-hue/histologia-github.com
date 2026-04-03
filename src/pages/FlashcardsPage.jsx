@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react'
-import { cards, decks } from '../flashcards/flashcards.js'
+import React, { useEffect, useMemo, useState } from 'react'
+import { getCards, getDecks } from '../flashcards/flashcards.js'
 import { isDue, schedule } from '../flashcards/srs.js'
+import { subscribeSlides } from '../slides/slides.js'
 import {
   addReviewEvent,
   bumpGlobalStats,
@@ -51,6 +52,19 @@ function buildChoices(allCards, correct, count) {
 }
 
 export default function FlashcardsPage() {
+  const [decks, setDecks] = useState(() => getDecks())
+  const [cards, setCards] = useState(() => getCards())
+
+  useEffect(() => {
+    const unsub = subscribeSlides(() => {
+      setDecks(getDecks())
+      setCards(getCards())
+    })
+    return () => {
+      unsub?.()
+    }
+  }, [])
+
   const [deckId, setDeckId] = useState('all')
   const [limit, setLimit] = useState(12)
   const [mode, setMode] = useState('adaptive')

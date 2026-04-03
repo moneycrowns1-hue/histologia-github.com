@@ -1,9 +1,20 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import SlideViewer from '../slides/SlideViewer.jsx'
-import { catalog } from '../slides/slides.js'
+import { getCatalog, subscribeSlides } from '../slides/slides.js'
 
 export default function QuizPage() {
-  const allSlides = useMemo(() => catalog.flatMap((c) => c.items), [])
+  const [catalog, setCatalog] = useState(() => getCatalog())
+
+  useEffect(() => {
+    const unsub = subscribeSlides(() => {
+      setCatalog(getCatalog())
+    })
+    return () => {
+      unsub?.()
+    }
+  }, [])
+
+  const allSlides = useMemo(() => catalog.flatMap((c) => c.items), [catalog])
   const [categoryId, setCategoryId] = useState('all')
   const [questionCount, setQuestionCount] = useState(8)
 

@@ -1,13 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import SlideViewer from '../slides/SlideViewer.jsx'
-import { slides } from '../slides/slides.js'
+import { getSlides, subscribeSlides } from '../slides/slides.js'
 
 export default function ViewerPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+
+  const [slides, setSlides] = useState(() => getSlides())
+
+  useEffect(() => {
+    const unsub = subscribeSlides(() => {
+      setSlides(getSlides())
+    })
+    return () => {
+      unsub?.()
+    }
+  }, [])
+
   const slideId = searchParams.get('slide') || slides[0]?.id
-  const slide = useMemo(() => slides.find((s) => s.id === slideId) || slides[0], [slideId])
+  const slide = useMemo(() => slides.find((s) => s.id === slideId) || slides[0], [slides, slideId])
 
   const [mode, setMode] = useState('study')
 

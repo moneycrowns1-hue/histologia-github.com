@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import HomePage from './pages/HomePage.jsx'
 import LibraryPage from './pages/LibraryPage.jsx'
@@ -9,10 +9,47 @@ import HotspotEditorPage from './pages/HotspotEditorPage.jsx'
 import FlashcardsPage from './pages/FlashcardsPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import StructurePage from './pages/StructurePage.jsx'
+import LoginPage from './pages/LoginPage.jsx'
+import { cloudGetUser, cloudOnAuthStateChange, cloudSignOut } from './utils/supabaseSync.js'
 
 const linkBase = 'px-3 py-2 rounded-lg text-sm font-medium'
 
 export default function App() {
+  const [user, setUser] = useState(null)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    cloudGetUser()
+      .then((u) => {
+        if (!alive) return
+        setUser(u)
+        setAuthChecked(true)
+      })
+      .catch(() => {
+        if (!alive) return
+        setUser(null)
+        setAuthChecked(true)
+      })
+
+    const unsub = cloudOnAuthStateChange((u) => {
+      if (!alive) return
+      setUser(u)
+      setAuthChecked(true)
+    })
+
+    return () => {
+      alive = false
+      unsub?.()
+    }
+  }, [])
+
+  if (!authChecked) return null
+
+  if (!user) {
+    return <LoginPage />
+  }
+
   return (
     <div className="min-h-dvh bg-slate-950 text-slate-100">
       <header className="sticky top-0 z-50 border-b border-slate-800/60 bg-slate-950/80 backdrop-blur">
@@ -92,6 +129,21 @@ export default function App() {
               Editor
             </NavLink>
           </nav>
+
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await cloudSignOut()
+              } catch {
+                // ignore
+              }
+            }}
+            className="hidden rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 md:inline-block"
+            title={user?.email || 'Cerrar sesión'}
+          >
+            Salir
+          </button>
         </div>
       </header>
 

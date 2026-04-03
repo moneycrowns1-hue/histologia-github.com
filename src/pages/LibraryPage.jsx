@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { catalog } from '../slides/slides.js'
+import { getCatalog, subscribeSlides } from '../slides/slides.js'
 import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
 
 function slideThumb(s) {
@@ -109,6 +109,17 @@ function SlideCard({ slide, isFavorite, onToggleFavorite, priority = false }) {
 }
 
 export default function LibraryPage() {
+  const [catalog, setCatalog] = useState(() => getCatalog())
+
+  useEffect(() => {
+    const unsub = subscribeSlides(() => {
+      setCatalog(getCatalog())
+    })
+    return () => {
+      unsub?.()
+    }
+  }, [])
+
   const [query, setQuery] = useState(() => {
     try {
       return localStorage.getItem('microlab:library:query') || ''

@@ -4,12 +4,8 @@ import { slides } from '../slides/slides.js'
 import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
 import { getSavedImageBlob, idbUrlToKey, isIdbUrl, listSavedImages, saveImageFile } from '../utils/localImages.js'
 import {
-  cloudGetUser,
   cloudIsReady,
   cloudListSlides,
-  cloudOnAuthStateChange,
-  cloudSendLoginEmail,
-  cloudSignOut,
   cloudUpsertSlide
 } from '../utils/supabaseSync.js'
 
@@ -50,8 +46,6 @@ export default function HotspotEditorPage() {
   const [isDirty, setIsDirty] = useState(false)
 
   const [cloudReady, setCloudReady] = useState(false)
-  const [cloudUser, setCloudUser] = useState(null)
-  const [cloudEmail, setCloudEmail] = useState('')
 
   const fileInputRef = useRef(null)
   const uploadModeRef = useRef('new')
@@ -73,21 +67,6 @@ export default function HotspotEditorPage() {
         if (!alive) return
         setCloudReady(false)
       })
-
-    cloudGetUser()
-      .then((u) => {
-        if (!alive) return
-        setCloudUser(u)
-      })
-      .catch(() => {
-        if (!alive) return
-        setCloudUser(null)
-      })
-
-    const unsubscribe = cloudOnAuthStateChange((u) => {
-      if (!alive) return
-      setCloudUser(u)
-    })
 
     async function loadImages() {
       try {
@@ -123,56 +102,12 @@ export default function HotspotEditorPage() {
 
     return () => {
       alive = false
-      unsubscribe?.()
     }
   }, [])
-
-  async function cloudLogin() {
-    if (!cloudReady) {
-      setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
-      return
-    }
-
-    const email = String(cloudEmail || '').trim()
-    if (!email || !email.includes('@')) {
-      setSaveStatus('Ingresa un email válido.')
-      return
-    }
-
-    try {
-      setIsSaving(true)
-      setSaveStatus('Enviando link/código al email…')
-      const redirectTo = `${window.location.origin}${window.location.pathname}#/editor`
-      await cloudSendLoginEmail(email, redirectTo)
-      setSaveStatus('Listo. Revisa tu correo y abre el link para iniciar sesión.')
-    } catch (e) {
-      setSaveStatus(`No se pudo enviar el login: ${e?.message || 'error'}`)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  async function cloudLogout() {
-    if (!cloudReady) return
-    try {
-      setIsSaving(true)
-      await cloudSignOut()
-      setCloudUser(null)
-      setSaveStatus('Sesión cerrada.')
-    } catch (e) {
-      setSaveStatus(`No se pudo cerrar sesión: ${e?.message || 'error'}`)
-    } finally {
-      setIsSaving(false)
-    }
-  }
 
   async function cloudUploadActive() {
     if (!cloudReady) {
       setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
-      return
-    }
-    if (!cloudUser) {
-      setSaveStatus('Inicia sesión (email) para usar la nube.')
       return
     }
     if (!activeSlide) return
@@ -193,10 +128,6 @@ export default function HotspotEditorPage() {
   async function cloudImportSlides() {
     if (!cloudReady) {
       setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
-      return
-    }
-    if (!cloudUser) {
-      setSaveStatus('Inicia sesión (email) para usar la nube.')
       return
     }
 
@@ -229,6 +160,11 @@ export default function HotspotEditorPage() {
       const next = [...arr.filter((s) => s?.id !== slide.id), slide]
       localStorage.setItem('microlab:local_slides', JSON.stringify(next))
       setLocalSlidesList(next)
+      try {
+        window.dispatchEvent(new Event('microlab:slides-updated'))
+      } catch {
+        // ignore
+      }
     } catch {
       // ignore
     }
@@ -241,6 +177,11 @@ export default function HotspotEditorPage() {
       const obj = prev && typeof prev === 'object' ? prev : {}
       obj[slide.id] = slide
       localStorage.setItem('microlab:overrides_local', JSON.stringify(obj))
+      try {
+        window.dispatchEvent(new Event('microlab:slides-updated'))
+      } catch {
+        // ignore
+      }
     } catch {
       // ignore
     }
@@ -348,6 +289,18 @@ export default function HotspotEditorPage() {
 
       if (uploadModeRef.current === 'replace') {
         setSlideImages(saved.url)
+        try {
+          const current = draft && baseSlide && draft.id === baseSlide.id ? draft : baseSlide
+          if (current && typeof current.id === 'string') {
+            saveLocalSlide({
+              ...current,
+              imageUrl: saved.url,
+              thumbnailUrl: saved.url
+            })
+          }
+        } catch {
+          // ignore
+        }
         setSaveStatus('Imagen reemplazada. Ahora puedes agregar hotspots.')
         return
       }
@@ -605,60 +558,17 @@ export default function HotspotEditorPage() {
             Reemplazar imagen
           </button>
 
-          {cloudReady ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800/60 bg-slate-900/30 px-3 py-2">
-              {cloudUser ? (
-                <>
-                  <div className="text-xs text-slate-300">Sesión: {cloudUser?.email || cloudUser?.id}</div>
-                  <button
-                    type="button"
-                    disabled={isSaving}
-                    onClick={cloudLogout}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 ${
-                      isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
-                    }`}
-                  >
-                    Cerrar sesión
-                  </button>
-                </>
-              ) : (
-                <>
-                  <input
-                    value={cloudEmail}
-                    onChange={(e) => setCloudEmail(e.target.value)}
-                    placeholder="tu@email.com"
-                    className="w-48 rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1 text-xs placeholder:text-slate-600"
-                  />
-                  <button
-                    type="button"
-                    disabled={isSaving}
-                    onClick={cloudLogin}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 ${
-                      isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
-                    }`}
-                  >
-                    Enviar link/código
-                  </button>
-                </>
-              )}
-            </div>
-          ) : null}
-
           <button
             type="button"
-            disabled={!activeSlide || isSaving || !cloudUser}
+            disabled={!activeSlide || isSaving}
             onClick={cloudUploadActive}
             className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
-              !activeSlide || isSaving || !cloudUser
-                ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800'
-                : 'bg-slate-800'
+              !activeSlide || isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
             }`}
             title={
               !cloudReady
                 ? 'Configura Supabase en variables de entorno'
-                : !cloudUser
-                  ? 'Inicia sesión para usar la nube'
-                  : 'Subir diapositiva a Supabase'
+                : 'Subir diapositiva a Supabase'
             }
           >
             Nube: subir
@@ -666,17 +576,15 @@ export default function HotspotEditorPage() {
 
           <button
             type="button"
-            disabled={isSaving || !cloudUser}
+            disabled={isSaving}
             onClick={cloudImportSlides}
             className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
-              isSaving || !cloudUser ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
+              isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
             }`}
             title={
               !cloudReady
                 ? 'Configura Supabase en variables de entorno'
-                : !cloudUser
-                  ? 'Inicia sesión para usar la nube'
-                  : 'Importar tus diapositivas desde Supabase'
+                : 'Importar tus diapositivas desde Supabase'
             }
           >
             Nube: importar
