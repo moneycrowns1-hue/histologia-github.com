@@ -58,9 +58,9 @@ export default function LoginPage() {
         // ignore
       }
 
-      const redirectTo = `${window.location.origin}${window.location.pathname}#/`
+      const redirectTo = `${window.location.origin}${window.location.pathname}`
       await cloudSendLoginEmail(e, redirectTo)
-      setStatus('Revisa tu correo y abre el link para iniciar sesión.')
+      setStatus('Revisa tu correo y abre el link para iniciar sesión. Si usas iPhone/iPad, ábrelo en el mismo navegador donde está la app. Los links viejos pueden expirar.')
     } catch (err) {
       const msg = String(err?.message || 'error')
       if (msg.toLowerCase().includes('rate limit')) {
@@ -108,7 +108,7 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-5 text-xs text-slate-500">
-          Abre el link del correo en este mismo navegador. Luego volverás automáticamente a la app.
+          Abre el link del correo en este mismo navegador. Si el link falla, vuelve a enviar uno nuevo (los links expiran).
         </div>
       </div>
     </div>
