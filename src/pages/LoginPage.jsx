@@ -1,12 +1,39 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { cloudIsReady, cloudSendLoginEmail } from '../utils/supabaseSync.js'
+
+const COOLDOWN_KEY = 'microlab:auth:otp_cooldown_until'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
+  const [cooldownUntil, setCooldownUntil] = useState(() => {
+    try {
+      const raw = localStorage.getItem(COOLDOWN_KEY)
+      const n = raw ? Number(raw) : 0
+      return Number.isFinite(n) ? n : 0
+    } catch {
+      return 0
+    }
+  })
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setCooldownUntil((v) => v)
+    }, 250)
+    return () => clearInterval(t)
+  }, [])
+
+  const cooldownMsLeft = useMemo(() => {
+    const left = (cooldownUntil || 0) - Date.now()
+    return left > 0 ? left : 0
+  }, [cooldownUntil])
+
+  const canSend = !busy && cooldownMsLeft <= 0
 
   async function onSend() {
+    if (!canSend) return
+
     const ready = await cloudIsReady().catch(() => false)
     if (!ready) {
       setStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
@@ -22,11 +49,32 @@ export default function LoginPage() {
     try {
       setBusy(true)
       setStatus('Enviando link/código al email…')
+
+      try {
+        const until = Date.now() + 60_000
+        localStorage.setItem(COOLDOWN_KEY, String(until))
+        setCooldownUntil(until)
+      } catch {
+        // ignore
+      }
+
       const redirectTo = `${window.location.origin}${window.location.pathname}#/`
       await cloudSendLoginEmail(e, redirectTo)
       setStatus('Revisa tu correo y abre el link para iniciar sesión.')
     } catch (err) {
-      setStatus(`No se pudo enviar el login: ${err?.message || 'error'}`)
+      const msg = String(err?.message || 'error')
+      if (msg.toLowerCase().includes('rate limit')) {
+        setStatus('Demasiados intentos de email por ahora (rate limit). Espera unos minutos y vuelve a intentar.')
+        try {
+          const until = Date.now() + 3 * 60_000
+          localStorage.setItem(COOLDOWN_KEY, String(until))
+          setCooldownUntil(until)
+        } catch {
+          // ignore
+        }
+      } else {
+        setStatus(`No se pudo enviar el login: ${msg}`)
+      }
     } finally {
       setBusy(false)
     }
@@ -48,13 +96,13 @@ export default function LoginPage() {
           />
           <button
             type="button"
-            disabled={busy}
+            disabled={!canSend}
             onClick={onSend}
             className={`mt-2 h-12 rounded-2xl px-4 text-base font-extrabold transition active:scale-[0.99] ${
-              busy ? 'bg-white/10 text-slate-400' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400'
+              !canSend ? 'bg-white/10 text-slate-400' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400'
             }`}
           >
-            Enviar link/código
+            {cooldownMsLeft > 0 ? `Reenviar en ${Math.ceil(cooldownMsLeft / 1000)}s` : 'Enviar link/código'}
           </button>
           {status ? <div className="mt-2 text-sm text-slate-300">{status}</div> : null}
         </div>
