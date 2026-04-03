@@ -24,6 +24,19 @@ export async function cloudSendLoginEmail(email, redirectTo) {
   return true
 }
 
+export async function cloudSignInWithPassword(email, password) {
+  if (!isSupabaseConfigured()) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
+  if (!supabase) throw new Error('Supabase not configured')
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  })
+  if (error) throw error
+  return data?.user || null
+}
+
 export async function cloudHandleAuthRedirect() {
   if (!isSupabaseConfigured()) return false
   const supabase = getSupabase()
@@ -65,6 +78,21 @@ export async function cloudGetUser() {
   if (!supabase) return null
   const { data, error } = await supabase.auth.getUser()
   if (error) return null
+  return data?.user || null
+}
+
+export async function cloudUpdateProfile({ role }) {
+  if (!isSupabaseConfigured()) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
+  if (!supabase) throw new Error('Supabase not configured')
+
+  const nextRole = String(role || '').trim()
+  const { data, error } = await supabase.auth.updateUser({
+    data: {
+      role: nextRole
+    }
+  })
+  if (error) throw error
   return data?.user || null
 }
 

@@ -1,38 +1,26 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { cloudIsReady, cloudSendLoginEmail } from '../utils/supabaseSync.js'
-
-const COOLDOWN_KEY = 'microlab:auth:otp_cooldown_until'
+import React, { useState } from 'react'
+import { cloudIsReady, cloudSignInWithPassword } from '../utils/supabaseSync.js'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
-  const [cooldownUntil, setCooldownUntil] = useState(() => {
-    try {
-      const raw = localStorage.getItem(COOLDOWN_KEY)
-      const n = raw ? Number(raw) : 0
-      return Number.isFinite(n) ? n : 0
-    } catch {
-      return 0
-    }
-  })
 
-  useEffect(() => {
-    const t = setInterval(() => {
-      setCooldownUntil((v) => v)
-    }, 250)
-    return () => clearInterval(t)
-  }, [])
+  const canSignIn = !busy
 
-  const cooldownMsLeft = useMemo(() => {
-    const left = (cooldownUntil || 0) - Date.now()
-    return left > 0 ? left : 0
-  }, [cooldownUntil])
+  function isAllowedEmail(e) {
+    const raw = String(import.meta.env.VITE_ALLOWED_EMAILS || '').trim()
+    if (!raw) return true
+    const allowed = raw
+      .split(',')
+      .map((x) => String(x || '').trim().toLowerCase())
+      .filter(Boolean)
+    return allowed.includes(String(e || '').trim().toLowerCase())
+  }
 
-  const canSend = !busy && cooldownMsLeft <= 0
-
-  async function onSend() {
-    if (!canSend) return
+  async function onSignIn() {
+    if (!canSignIn) return
 
     const ready = await cloudIsReady().catch(() => false)
     if (!ready) {
@@ -46,35 +34,25 @@ export default function LoginPage() {
       return
     }
 
+    if (!isAllowedEmail(e)) {
+      setStatus('Este email no está autorizado para entrar.')
+      return
+    }
+
+    const p = String(password || '')
+    if (!p) {
+      setStatus('Ingresa tu contraseña.')
+      return
+    }
+
     try {
       setBusy(true)
-      setStatus('Enviando link/código al email…')
-
-      try {
-        const until = Date.now() + 60_000
-        localStorage.setItem(COOLDOWN_KEY, String(until))
-        setCooldownUntil(until)
-      } catch {
-        // ignore
-      }
-
-      const redirectTo = `${window.location.origin}${window.location.pathname}`
-      await cloudSendLoginEmail(e, redirectTo)
-      setStatus('Revisa tu correo y abre el link para iniciar sesión. Si usas iPhone/iPad, ábrelo en el mismo navegador donde está la app. Los links viejos pueden expirar.')
+      setStatus('Iniciando sesión…')
+      await cloudSignInWithPassword(e, p)
+      setStatus('')
     } catch (err) {
       const msg = String(err?.message || 'error')
-      if (msg.toLowerCase().includes('rate limit')) {
-        setStatus('Demasiados intentos de email por ahora (rate limit). Espera unos minutos y vuelve a intentar.')
-        try {
-          const until = Date.now() + 3 * 60_000
-          localStorage.setItem(COOLDOWN_KEY, String(until))
-          setCooldownUntil(until)
-        } catch {
-          // ignore
-        }
-      } else {
-        setStatus(`No se pudo enviar el login: ${msg}`)
-      }
+      setStatus(`No se pudo iniciar sesión: ${msg}`)
     } finally {
       setBusy(false)
     }
@@ -94,21 +72,29 @@ export default function LoginPage() {
             placeholder="tu@email.com"
             className="h-12 w-full rounded-2xl border border-white/10 bg-black px-4 text-base font-semibold text-white placeholder:text-slate-600"
           />
+          <div className="mt-2 text-xs font-semibold text-slate-400">Contraseña</div>
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            type="password"
+            className="h-12 w-full rounded-2xl border border-white/10 bg-black px-4 text-base font-semibold text-white placeholder:text-slate-600"
+          />
           <button
             type="button"
-            disabled={!canSend}
-            onClick={onSend}
+            disabled={!canSignIn}
+            onClick={onSignIn}
             className={`mt-2 h-12 rounded-2xl px-4 text-base font-extrabold transition active:scale-[0.99] ${
-              !canSend ? 'bg-white/10 text-slate-400' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400'
+              !canSignIn ? 'bg-white/10 text-slate-400' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400'
             }`}
           >
-            {cooldownMsLeft > 0 ? `Reenviar en ${Math.ceil(cooldownMsLeft / 1000)}s` : 'Enviar link/código'}
+            Entrar
           </button>
           {status ? <div className="mt-2 text-sm text-slate-300">{status}</div> : null}
         </div>
 
         <div className="mt-5 text-xs text-slate-500">
-          Abre el link del correo en este mismo navegador. Si el link falla, vuelve a enviar uno nuevo (los links expiran).
+          Tu sesión queda guardada en este dispositivo. Si quieres cambiar de cuenta, cierra sesión desde Perfil.
         </div>
       </div>
     </div>

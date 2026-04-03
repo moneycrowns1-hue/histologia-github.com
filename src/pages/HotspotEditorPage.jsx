@@ -5,6 +5,7 @@ import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
 import { getSavedImageBlob, idbUrlToKey, isIdbUrl, listSavedImages, saveImageFile } from '../utils/localImages.js'
 import {
   cloudIsReady,
+  cloudGetUser,
   cloudListSlides,
   cloudUpsertSlide
 } from '../utils/supabaseSync.js'
@@ -46,6 +47,7 @@ export default function HotspotEditorPage() {
   const [isDirty, setIsDirty] = useState(false)
 
   const [cloudReady, setCloudReady] = useState(false)
+  const [isEditor, setIsEditor] = useState(false)
 
   const fileInputRef = useRef(null)
   const uploadModeRef = useRef('new')
@@ -66,6 +68,17 @@ export default function HotspotEditorPage() {
       .catch(() => {
         if (!alive) return
         setCloudReady(false)
+      })
+
+    cloudGetUser()
+      .then((u) => {
+        if (!alive) return
+        const role = String(u?.user_metadata?.role || '').trim().toLowerCase()
+        setIsEditor(role === 'editor')
+      })
+      .catch(() => {
+        if (!alive) return
+        setIsEditor(false)
       })
 
     async function loadImages() {
@@ -106,6 +119,10 @@ export default function HotspotEditorPage() {
   }, [])
 
   async function cloudUploadActive() {
+    if (!isEditor) {
+      setSaveStatus('No tienes permiso para usar la nube. Cambia tu rol a Editor en Perfil.')
+      return
+    }
     if (!cloudReady) {
       setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
       return
@@ -126,6 +143,10 @@ export default function HotspotEditorPage() {
   }
 
   async function cloudImportSlides() {
+    if (!isEditor) {
+      setSaveStatus('No tienes permiso para usar la nube. Cambia tu rol a Editor en Perfil.')
+      return
+    }
     if (!cloudReady) {
       setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
       return
@@ -539,56 +560,52 @@ export default function HotspotEditorPage() {
               uploadModeRef.current = 'new'
               fileInputRef.current?.click()
             }}
-            className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+            className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400"
           >
             Subir (nueva)
           </button>
 
           <button
             type="button"
-            disabled={!activeSlide}
+            disabled={!activeSlide || isSaving}
             onClick={() => {
               uploadModeRef.current = 'replace'
               fileInputRef.current?.click()
             }}
             className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
-              !activeSlide ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
+              !activeSlide || isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
             }`}
           >
             Reemplazar imagen
           </button>
 
-          <button
-            type="button"
-            disabled={!activeSlide || isSaving}
-            onClick={cloudUploadActive}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
-              !activeSlide || isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
-            }`}
-            title={
-              !cloudReady
-                ? 'Configura Supabase en variables de entorno'
-                : 'Subir diapositiva a Supabase'
-            }
-          >
-            Nube: subir
-          </button>
+          {isEditor ? (
+            <>
+              <button
+                type="button"
+                disabled={!activeSlide || isSaving}
+                onClick={cloudUploadActive}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
+                  !activeSlide || isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
+                }`}
+                title={!cloudReady ? 'Configura Supabase en variables de entorno' : 'Subir diapositiva a Supabase'}
+              >
+                Nube: subir
+              </button>
 
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={cloudImportSlides}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
-              isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
-            }`}
-            title={
-              !cloudReady
-                ? 'Configura Supabase en variables de entorno'
-                : 'Importar tus diapositivas desde Supabase'
-            }
-          >
-            Nube: importar
-          </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={cloudImportSlides}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
+                  isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
+                }`}
+                title={!cloudReady ? 'Configura Supabase en variables de entorno' : 'Importar tus diapositivas desde Supabase'}
+              >
+                Nube: importar
+              </button>
+            </>
+          ) : null}
 
           <button
             type="button"

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { NavLink, Route, Routes } from 'react-router-dom'
+import React, { useEffect, useMemo, useState } from 'react'
+import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import HomePage from './pages/HomePage.jsx'
 import LibraryPage from './pages/LibraryPage.jsx'
 import ViewerPage from './pages/ViewerPage.jsx'
@@ -10,6 +10,7 @@ import FlashcardsPage from './pages/FlashcardsPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import StructurePage from './pages/StructurePage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
+import ProfilePage from './pages/ProfilePage.jsx'
 import { cloudGetUser, cloudHandleAuthRedirect, cloudOnAuthStateChange, cloudSignOut } from './utils/supabaseSync.js'
 
 const linkBase = 'px-3 py-2 rounded-lg text-sm font-medium'
@@ -17,6 +18,13 @@ const linkBase = 'px-3 py-2 rounded-lg text-sm font-medium'
 export default function App() {
   const [user, setUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
+
+  const role = useMemo(() => {
+    const r = String(user?.user_metadata?.role || '').trim().toLowerCase()
+    return r
+  }, [user])
+
+  const isEditor = role === 'editor'
 
   useEffect(() => {
     let alive = true
@@ -104,37 +112,49 @@ export default function App() {
             >
               Quiz
             </NavLink>
+            {isEditor ? (
+              <>
+                <NavLink
+                  to="/notificaciones"
+                  className={({ isActive }) =>
+                    `${linkBase} ${isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-900'}`
+                  }
+                >
+                  Notificaciones
+                </NavLink>
+                <NavLink
+                  to="/flashcards"
+                  className={({ isActive }) =>
+                    `${linkBase} ${isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-900'}`
+                  }
+                >
+                  Flashcards
+                </NavLink>
+                <NavLink
+                  to="/estadisticas"
+                  className={({ isActive }) =>
+                    `${linkBase} ${isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-900'}`
+                  }
+                >
+                  Estadísticas
+                </NavLink>
+                <NavLink
+                  to="/editor"
+                  className={({ isActive }) =>
+                    `${linkBase} ${isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-900'}`
+                  }
+                >
+                  Editor
+                </NavLink>
+              </>
+            ) : null}
             <NavLink
-              to="/notificaciones"
+              to="/perfil"
               className={({ isActive }) =>
                 `${linkBase} ${isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-900'}`
               }
             >
-              Notificaciones
-            </NavLink>
-            <NavLink
-              to="/flashcards"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-900'}`
-              }
-            >
-              Flashcards
-            </NavLink>
-            <NavLink
-              to="/estadisticas"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-900'}`
-              }
-            >
-              Estadísticas
-            </NavLink>
-            <NavLink
-              to="/editor"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-900'}`
-              }
-            >
-              Editor
+              Perfil
             </NavLink>
           </nav>
 
@@ -161,11 +181,28 @@ export default function App() {
           <Route path="/biblioteca" element={<LibraryPage />} />
           <Route path="/visor" element={<ViewerPage />} />
           <Route path="/quiz" element={<QuizPage />} />
-          <Route path="/notificaciones" element={<NotificationsPage />} />
-          <Route path="/flashcards" element={<FlashcardsPage />} />
-          <Route path="/estadisticas" element={<StatsPage />} />
-          <Route path="/estructura/:cardId" element={<StructurePage />} />
-          <Route path="/editor" element={<HotspotEditorPage />} />
+          <Route
+            path="/notificaciones"
+            element={isEditor ? <NotificationsPage /> : <Navigate to="/biblioteca" replace />}
+          />
+          <Route
+            path="/flashcards"
+            element={isEditor ? <FlashcardsPage /> : <Navigate to="/biblioteca" replace />}
+          />
+          <Route
+            path="/estadisticas"
+            element={isEditor ? <StatsPage /> : <Navigate to="/biblioteca" replace />}
+          />
+          <Route
+            path="/estructura/:cardId"
+            element={isEditor ? <StructurePage /> : <Navigate to="/biblioteca" replace />}
+          />
+          <Route
+            path="/editor"
+            element={isEditor ? <HotspotEditorPage /> : <Navigate to="/biblioteca" replace />}
+          />
+          <Route path="/perfil" element={<ProfilePage />} />
+          <Route path="*" element={<Navigate to="/biblioteca" replace />} />
         </Routes>
       </main>
 
