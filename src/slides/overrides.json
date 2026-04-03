@@ -1,0 +1,138 @@
+{
+  "epitelio-simple-demo": {
+    "id": "epitelio-simple-demo",
+    "title": "Prueba 1 ",
+    "topic": "Tejidos · Epitelial",
+    "tags": [
+      "epitelial",
+      "tejidos",
+      "básico"
+    ],
+    "difficulty": 1,
+    "description": "sssssssssssss",
+    "imageUrl": "/slides/Peripheral_nerve,_cross_section.jpg",
+    "thumbnailUrl": "/slides/Peripheral_nerve,_cross_section.jpg",
+    "naturalSize": {
+      "width": 709,
+      "height": 532
+    },
+    "hotspots": [
+      {
+        "id": "hs-epitelio-simple-demo-1",
+        "x": 0.23413258110014104,
+        "y": 0.18305039943609022,
+        "name": "tejido epitelial ",
+        "description": "dasdasd",
+        "function": "sdasdasd"
+      },
+      {
+        "id": "hs-epitelio-simple-demo-2",
+        "x": 0.5073103913476511,
+        "y": 0.3180164201004354,
+        "name": "Neumocitos",
+        "description": "son caratetidticas inaudibles para el desmpeño artistico",
+        "function": "vaculaea sintegrantes de la celula"
+      },
+      {
+        "id": "hs-epitelio-simple-demo-3",
+        "x": 0.6445698166431594,
+        "y": 0.4499676926691729,
+        "name": "Estructura 3",
+        "description": "",
+        "function": ""
+      }
+    ]
+  },
+  "conectivo-laxo-demo": {
+    "id": "conectivo-laxo-demo",
+    "title": "Conectivo laxo (demo)",
+    "topic": "Tejidos · Conectivo",
+    "tags": [
+      "conectivo",
+      "tejidos",
+      "básico"
+    ],
+    "difficulty": 1,
+    "description": "Plantilla para practicar identificación de fibras y células en conectivo.",
+    "imageUrl": "/slides/Peripheral_nerve,_cross_section.jpg",
+    "thumbnailUrl": "/slides/Peripheral_nerve,_cross_section.jpg",
+    "naturalSize": {
+      "width": 709,
+      "height": 532
+    },
+    "hotspots": [
+      {
+        "id": "hs-fibra",
+        "x": 0.4,
+        "y": 0.62,
+        "name": "Fibras (ejemplo)",
+        "description": "Elementos del tejido conectivo que aportan soporte.",
+        "function": "Resistencia mecánica y estructura del estroma."
+      },
+      {
+        "id": "hs-celula",
+        "x": 0.68,
+        "y": 0.35,
+        "name": "Célula (ejemplo)",
+        "description": "Célula del conectivo (p. ej. fibroblasto) en este demo.",
+        "function": "Síntesis y mantenimiento de matriz extracelular."
+      }
+    ]
+  },
+  "musculo-estriado-demo": {
+    "id": "musculo-estriado-demo",
+    "title": "Músculo estriado (demo)",
+    "topic": "Tejidos · Muscular",
+    "tags": [
+      "muscular",
+      "tejidos",
+      "básico"
+    ],
+    "difficulty": 1,
+    "description": "Plantilla para practicar bandas, fibras y núcleos periféricos.",
+    "imageUrl": "/slides/Peripheral_nerve,_cross_section.jpg",
+    "thumbnailUrl": "/slides/Peripheral_nerve,_cross_section.jpg",
+    "naturalSize": {
+      "width": 709,
+      "height": 532
+    },
+    "hotspots": [
+      {
+        "id": "hs-bandas",
+        "x": 0.52,
+        "y": 0.52,
+        "name": "Bandas (ejemplo)",
+        "description": "Patrón repetitivo característico del músculo estriado.",
+        "function": "Organización sarcomérica asociada a contracción."
+      }
+    ]
+  },
+  "neurona-demo": {
+    "id": "neurona-demo",
+    "title": "Neurona (demo)",
+    "topic": "Tejidos · Nervioso",
+    "tags": [
+      "nervioso",
+      "tejidos",
+      "básico"
+    ],
+    "difficulty": 1,
+    "description": "Plantilla para practicar soma, núcleo y prolongaciones.",
+    "imageUrl": "/slides/Peripheral_nerve,_cross_section.jpg",
+    "thumbnailUrl": "/slides/Peripheral_nerve,_cross_section.jpg",
+    "naturalSize": {
+      "width": 709,
+      "height": 532
+    },
+    "hotspots": [
+      {
+        "id": "hs-soma",
+        "x": 0.33,
+        "y": 0.48,
+        "name": "Soma (ejemplo)",
+        "description": "Cuerpo celular de la neurona.",
+        "function": "Integra señales y mantiene el metabolismo celular."
+      }
+    ]
+  }
+}
