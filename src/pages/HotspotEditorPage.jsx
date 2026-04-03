@@ -3,6 +3,15 @@ import HotspotEditor from '../slides/HotspotEditor.jsx'
 import { slides } from '../slides/slides.js'
 import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
 import { getSavedImageBlob, idbUrlToKey, isIdbUrl, listSavedImages, saveImageFile } from '../utils/localImages.js'
+import {
+  cloudGetUser,
+  cloudIsReady,
+  cloudListSlides,
+  cloudOnAuthStateChange,
+  cloudSendLoginEmail,
+  cloudSignOut,
+  cloudUpsertSlide
+} from '../utils/supabaseSync.js'
 
 function safeId(s) {
   return String(s)
@@ -13,8 +22,25 @@ function safeId(s) {
 }
 
 export default function HotspotEditorPage() {
-  const [slideId, setSlideId] = useState(slides[0]?.id)
-  const baseSlide = useMemo(() => slides.find((s) => s.id === slideId) || slides[0] || null, [slideId])
+  const [localSlidesList, setLocalSlidesList] = useState(() => {
+    try {
+      const raw = localStorage.getItem('microlab:local_slides')
+      const arr = raw ? JSON.parse(raw) : []
+      return Array.isArray(arr) ? arr.filter((s) => s && typeof s === 'object' && typeof s.id === 'string') : []
+    } catch {
+      return []
+    }
+  })
+
+  const allSlides = useMemo(() => {
+    const map = new Map()
+    for (const s of slides) map.set(s.id, s)
+    for (const s of localSlidesList) map.set(s.id, s)
+    return Array.from(map.values())
+  }, [localSlidesList])
+
+  const [slideId, setSlideId] = useState(allSlides[0]?.id)
+  const baseSlide = useMemo(() => allSlides.find((s) => s.id === slideId) || allSlides[0] || null, [allSlides, slideId])
 
   const [draft, setDraft] = useState(null)
   const [saveStatus, setSaveStatus] = useState('')
@@ -23,7 +49,12 @@ export default function HotspotEditorPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
 
+  const [cloudReady, setCloudReady] = useState(false)
+  const [cloudUser, setCloudUser] = useState(null)
+  const [cloudEmail, setCloudEmail] = useState('')
+
   const fileInputRef = useRef(null)
+  const uploadModeRef = useRef('new')
 
   const autosaveTimerRef = useRef(null)
   const lastSavedTextRef = useRef('')
@@ -32,6 +63,31 @@ export default function HotspotEditorPage() {
 
   useEffect(() => {
     let alive = true
+
+    cloudIsReady()
+      .then((ready) => {
+        if (!alive) return
+        setCloudReady(Boolean(ready))
+      })
+      .catch(() => {
+        if (!alive) return
+        setCloudReady(false)
+      })
+
+    cloudGetUser()
+      .then((u) => {
+        if (!alive) return
+        setCloudUser(u)
+      })
+      .catch(() => {
+        if (!alive) return
+        setCloudUser(null)
+      })
+
+    const unsubscribe = cloudOnAuthStateChange((u) => {
+      if (!alive) return
+      setCloudUser(u)
+    })
 
     async function loadImages() {
       try {
@@ -67,8 +123,103 @@ export default function HotspotEditorPage() {
 
     return () => {
       alive = false
+      unsubscribe?.()
     }
   }, [])
+
+  async function cloudLogin() {
+    if (!cloudReady) {
+      setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
+      return
+    }
+
+    const email = String(cloudEmail || '').trim()
+    if (!email || !email.includes('@')) {
+      setSaveStatus('Ingresa un email válido.')
+      return
+    }
+
+    try {
+      setIsSaving(true)
+      setSaveStatus('Enviando link/código al email…')
+      const redirectTo = `${window.location.origin}${window.location.pathname}#/editor`
+      await cloudSendLoginEmail(email, redirectTo)
+      setSaveStatus('Listo. Revisa tu correo y abre el link para iniciar sesión.')
+    } catch (e) {
+      setSaveStatus(`No se pudo enviar el login: ${e?.message || 'error'}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function cloudLogout() {
+    if (!cloudReady) return
+    try {
+      setIsSaving(true)
+      await cloudSignOut()
+      setCloudUser(null)
+      setSaveStatus('Sesión cerrada.')
+    } catch (e) {
+      setSaveStatus(`No se pudo cerrar sesión: ${e?.message || 'error'}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function cloudUploadActive() {
+    if (!cloudReady) {
+      setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
+      return
+    }
+    if (!cloudUser) {
+      setSaveStatus('Inicia sesión (email) para usar la nube.')
+      return
+    }
+    if (!activeSlide) return
+
+    try {
+      setIsSaving(true)
+      setSaveStatus('Subiendo a la nube…')
+      const uploaded = await cloudUpsertSlide(activeSlide)
+      saveLocalSlide(uploaded)
+      setSaveStatus('Guardado en la nube.')
+    } catch (e) {
+      setSaveStatus(`No se pudo guardar en la nube: ${e?.message || 'error'}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function cloudImportSlides() {
+    if (!cloudReady) {
+      setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
+      return
+    }
+    if (!cloudUser) {
+      setSaveStatus('Inicia sesión (email) para usar la nube.')
+      return
+    }
+
+    try {
+      setIsSaving(true)
+      setSaveStatus('Importando desde la nube…')
+      const cloudSlides = await cloudListSlides()
+      const raw = localStorage.getItem('microlab:local_slides')
+      const prev = raw ? JSON.parse(raw) : []
+      const arr = Array.isArray(prev) ? prev : []
+      const map = new Map()
+      for (const s of arr) if (s && typeof s === 'object' && typeof s.id === 'string') map.set(s.id, s)
+      for (const s of cloudSlides) map.set(s.id, s)
+      const next = Array.from(map.values())
+      localStorage.setItem('microlab:local_slides', JSON.stringify(next))
+      setSaveStatus('Importado. Recargando…')
+      window.location.reload()
+    } catch (e) {
+      setSaveStatus(`No se pudo importar desde la nube: ${e?.message || 'error'}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   function saveLocalSlide(slide) {
     try {
@@ -77,6 +228,7 @@ export default function HotspotEditorPage() {
       const arr = Array.isArray(prev) ? prev : []
       const next = [...arr.filter((s) => s?.id !== slide.id), slide]
       localStorage.setItem('microlab:local_slides', JSON.stringify(next))
+      setLocalSlidesList(next)
     } catch {
       // ignore
     }
@@ -192,6 +344,14 @@ export default function HotspotEditorPage() {
       const file = files[0]
       const saved = await saveImageFile(file)
 
+      setLocalImages(await listSavedImages())
+
+      if (uploadModeRef.current === 'replace') {
+        setSlideImages(saved.url)
+        setSaveStatus('Imagen reemplazada. Ahora puedes agregar hotspots.')
+        return
+      }
+
       const nextId = `subida-${Date.now()}`
       const nextSlide = {
         id: nextId,
@@ -208,7 +368,6 @@ export default function HotspotEditorPage() {
 
       saveLocalSlide(nextSlide)
 
-      setLocalImages(await listSavedImages())
       setSlideId(nextSlide.id)
       setDraft(nextSlide)
       lastSavedTextRef.current = JSON.stringify(nextSlide, null, 2)
@@ -396,7 +555,7 @@ export default function HotspotEditorPage() {
             }}
             className="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm"
           >
-            {slides.map((s) => (
+            {allSlides.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.title}
               </option>
@@ -423,10 +582,104 @@ export default function HotspotEditorPage() {
 
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              uploadModeRef.current = 'new'
+              fileInputRef.current?.click()
+            }}
             className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
           >
-            Subir imagen
+            Subir (nueva)
+          </button>
+
+          <button
+            type="button"
+            disabled={!activeSlide}
+            onClick={() => {
+              uploadModeRef.current = 'replace'
+              fileInputRef.current?.click()
+            }}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
+              !activeSlide ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
+            }`}
+          >
+            Reemplazar imagen
+          </button>
+
+          {cloudReady ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800/60 bg-slate-900/30 px-3 py-2">
+              {cloudUser ? (
+                <>
+                  <div className="text-xs text-slate-300">Sesión: {cloudUser?.email || cloudUser?.id}</div>
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={cloudLogout}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 ${
+                      isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
+                    }`}
+                  >
+                    Cerrar sesión
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    value={cloudEmail}
+                    onChange={(e) => setCloudEmail(e.target.value)}
+                    placeholder="tu@email.com"
+                    className="w-48 rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1 text-xs placeholder:text-slate-600"
+                  />
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={cloudLogin}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 ${
+                      isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
+                    }`}
+                  >
+                    Enviar link/código
+                  </button>
+                </>
+              )}
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            disabled={!activeSlide || isSaving || !cloudUser}
+            onClick={cloudUploadActive}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
+              !activeSlide || isSaving || !cloudUser
+                ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800'
+                : 'bg-slate-800'
+            }`}
+            title={
+              !cloudReady
+                ? 'Configura Supabase en variables de entorno'
+                : !cloudUser
+                  ? 'Inicia sesión para usar la nube'
+                  : 'Subir diapositiva a Supabase'
+            }
+          >
+            Nube: subir
+          </button>
+
+          <button
+            type="button"
+            disabled={isSaving || !cloudUser}
+            onClick={cloudImportSlides}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
+              isSaving || !cloudUser ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
+            }`}
+            title={
+              !cloudReady
+                ? 'Configura Supabase en variables de entorno'
+                : !cloudUser
+                  ? 'Inicia sesión para usar la nube'
+                  : 'Importar tus diapositivas desde Supabase'
+            }
+          >
+            Nube: importar
           </button>
 
           <button
