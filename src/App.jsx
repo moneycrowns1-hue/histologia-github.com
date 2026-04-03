@@ -10,7 +10,7 @@ import FlashcardsPage from './pages/FlashcardsPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import StructurePage from './pages/StructurePage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
-import { cloudGetUser, cloudOnAuthStateChange, cloudSignOut } from './utils/supabaseSync.js'
+import { cloudGetUser, cloudHandleAuthRedirect, cloudOnAuthStateChange, cloudSignOut } from './utils/supabaseSync.js'
 
 const linkBase = 'px-3 py-2 rounded-lg text-sm font-medium'
 
@@ -20,7 +20,15 @@ export default function App() {
 
   useEffect(() => {
     let alive = true
-    cloudGetUser()
+    Promise.resolve()
+      .then(async () => {
+        try {
+          await cloudHandleAuthRedirect()
+        } catch {
+          // ignore
+        }
+        return cloudGetUser()
+      })
       .then((u) => {
         if (!alive) return
         setUser(u)

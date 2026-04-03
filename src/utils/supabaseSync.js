@@ -24,6 +24,32 @@ export async function cloudSendLoginEmail(email, redirectTo) {
   return true
 }
 
+export async function cloudHandleAuthRedirect() {
+  if (!isSupabaseConfigured()) return false
+  const supabase = getSupabase()
+  if (!supabase) return false
+
+  try {
+    const url = new URL(window.location.href)
+    const code = url.searchParams.get('code')
+    if (!code) return false
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (error) throw error
+
+    url.searchParams.delete('code')
+    url.searchParams.delete('error')
+    url.searchParams.delete('error_code')
+    url.searchParams.delete('error_description')
+    url.searchParams.delete('type')
+
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function cloudSignOut() {
   if (!isSupabaseConfigured()) throw new Error('Supabase not configured')
   const supabase = getSupabase()
