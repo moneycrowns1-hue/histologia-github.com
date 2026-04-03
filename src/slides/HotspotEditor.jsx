@@ -1,4 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
@@ -11,14 +12,31 @@ function deepClone(obj) {
 export default function HotspotEditor({ slide, onChange, onAddHotspot }) {
   const containerRef = useRef(null)
 
+  const resolvedImageUrl = useResolvedImageUrl(slide.imageUrl)
+
   const [selectedId, setSelectedId] = useState(null)
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 })
+
+  const [imageNatural, setImageNatural] = useState(() => slide?.naturalSize || { width: 0, height: 0 })
 
   const pointersRef = useRef(new Map())
   const dragRef = useRef({ draggingHotspotId: null })
   const lastRef = useRef({ x: 0, y: 0, scale: 1, pinchDist: null })
 
   const selected = useMemo(() => slide.hotspots.find((h) => h.id === selectedId) || null, [slide.hotspots, selectedId])
+
+  useEffect(() => {
+    setSelectedId(null)
+    setView({ x: 0, y: 0, scale: 1 })
+    lastRef.current = { x: 0, y: 0, scale: 1, pinchDist: null }
+    setImageNatural(slide?.naturalSize || { width: 0, height: 0 })
+  }, [slide.id])
+
+  const imageSize = useMemo(() => {
+    const w = imageNatural?.width || slide?.naturalSize?.width || 0
+    const h = imageNatural?.height || slide?.naturalSize?.height || 0
+    return { width: w > 0 ? w : 1, height: h > 0 ? h : 1 }
+  }, [imageNatural?.height, imageNatural?.width, slide?.naturalSize?.height, slide?.naturalSize?.width])
 
   function getImageRect() {
     const el = containerRef.current
@@ -27,8 +45,8 @@ export default function HotspotEditor({ slide, onChange, onAddHotspot }) {
     const cx = rect.left + rect.width / 2
     const cy = rect.top + rect.height / 2
 
-    const w = slide.naturalSize.width * view.scale
-    const h = slide.naturalSize.height * view.scale
+    const w = imageSize.width * view.scale
+    const h = imageSize.height * view.scale
 
     const left = cx + view.x - w / 2
     const top = cy + view.y - h / 2
@@ -179,11 +197,17 @@ export default function HotspotEditor({ slide, onChange, onAddHotspot }) {
         >
           <div className="relative">
             <img
-              src={slide.imageUrl}
+              src={resolvedImageUrl}
               alt={slide.title}
               draggable={false}
               className="select-none max-w-none"
-              style={{ width: slide.naturalSize.width, height: slide.naturalSize.height }}
+              style={{ width: imageSize.width, height: imageSize.height }}
+              onLoad={(e) => {
+                const img = e.currentTarget
+                const w = img?.naturalWidth || 0
+                const h = img?.naturalHeight || 0
+                if (w > 0 && h > 0) setImageNatural({ width: w, height: h })
+              }}
             />
 
             {slide.hotspots.map((h) => {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { catalog } from '../slides/slides.js'
+import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
 
 function slideThumb(s) {
   return s.thumbnailUrl || s.imageUrl
@@ -8,6 +9,7 @@ function slideThumb(s) {
 
 function RecentStory({ slide, isFavorite }) {
   const [loaded, setLoaded] = useState(false)
+  const thumb = useResolvedImageUrl(slideThumb(slide))
 
   return (
     <Link
@@ -23,7 +25,7 @@ function RecentStory({ slide, isFavorite }) {
           <div className="relative h-full w-full overflow-hidden rounded-full bg-black">
             {!loaded ? <div className="absolute inset-0 animate-pulse bg-white/5" /> : null}
             <img
-              src={slideThumb(slide)}
+              src={thumb}
               alt={slide.title}
               className={`h-full w-full object-cover transition duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
               loading="lazy"
@@ -42,6 +44,7 @@ function RecentStory({ slide, isFavorite }) {
 
 function SlideCard({ slide, isFavorite, onToggleFavorite, priority = false }) {
   const [loaded, setLoaded] = useState(false)
+  const thumb = useResolvedImageUrl(slideThumb(slide))
 
   const subtitle = useMemo(() => {
     const t = (slide?.topic || '').trim()
@@ -61,7 +64,7 @@ function SlideCard({ slide, isFavorite, onToggleFavorite, priority = false }) {
             <div className="absolute inset-0 animate-pulse bg-white/5" />
           ) : null}
           <img
-            src={slideThumb(slide)}
+            src={thumb}
             alt={slide.title}
             className={`absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.02] ${
               loaded ? 'opacity-100' : 'opacity-0'

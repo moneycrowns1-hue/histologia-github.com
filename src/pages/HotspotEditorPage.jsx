@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import HotspotEditor from '../slides/HotspotEditor.jsx'
 import { slides } from '../slides/slides.js'
+import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
+import { getSavedImageBlob, idbUrlToKey, isIdbUrl, listSavedImages, saveImageFile } from '../utils/localImages.js'
 
 function safeId(s) {
   return String(s)
@@ -17,8 +19,11 @@ export default function HotspotEditorPage() {
   const [draft, setDraft] = useState(null)
   const [saveStatus, setSaveStatus] = useState('')
   const [images, setImages] = useState([])
+  const [localImages, setLocalImages] = useState([])
   const [isSaving, setIsSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
+
+  const fileInputRef = useRef(null)
 
   const autosaveTimerRef = useRef(null)
   const lastSavedTextRef = useRef('')
@@ -40,7 +45,19 @@ export default function HotspotEditorPage() {
       }
     }
 
+    async function loadLocalImages() {
+      try {
+        const items = await listSavedImages()
+        if (!alive) return
+        setLocalImages(items)
+      } catch {
+        if (!alive) return
+        setLocalImages([])
+      }
+    }
+
     loadImages()
+    loadLocalImages()
 
     if (import.meta.hot) {
       import.meta.hot.on('microlab:slides-changed', () => {
@@ -52,6 +69,30 @@ export default function HotspotEditorPage() {
       alive = false
     }
   }, [])
+
+  function saveLocalSlide(slide) {
+    try {
+      const raw = localStorage.getItem('microlab:local_slides')
+      const prev = raw ? JSON.parse(raw) : []
+      const arr = Array.isArray(prev) ? prev : []
+      const next = [...arr.filter((s) => s?.id !== slide.id), slide]
+      localStorage.setItem('microlab:local_slides', JSON.stringify(next))
+    } catch {
+      // ignore
+    }
+  }
+
+  function saveLocalOverride(slide) {
+    try {
+      const raw = localStorage.getItem('microlab:overrides_local')
+      const prev = raw ? JSON.parse(raw) : {}
+      const obj = prev && typeof prev === 'object' ? prev : {}
+      obj[slide.id] = slide
+      localStorage.setItem('microlab:overrides_local', JSON.stringify(obj))
+    } catch {
+      // ignore
+    }
+  }
 
   function ensureDraft() {
     if (!baseSlide) return
@@ -82,21 +123,29 @@ export default function HotspotEditorPage() {
     try {
       setIsSaving(true)
       setSaveStatus(isAuto ? 'Guardando…' : 'Guardando…')
-      const res = await fetch('/__editor_save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slideId: slide.id, slide })
-      })
-      const data = await res.json().catch(() => ({}))
-      if (data?.ok) {
+      try {
+        const res = await fetch('/__editor_save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slideId: slide.id, slide })
+        })
+        const data = await res.json().catch(() => ({}))
+        if (data?.ok) {
+          lastSavedTextRef.current = text
+          setIsDirty(false)
+          setSaveStatus(isAuto ? 'Guardado automático (overrides.json)' : 'Guardado (overrides.json)')
+          return
+        }
+        setSaveStatus(`No se pudo guardar: ${data?.error || 'error'}`)
+      } catch {
+        // Fallback (GitHub Pages / iPad): persistir localmente.
+        saveLocalOverride(slide)
         lastSavedTextRef.current = text
         setIsDirty(false)
-        setSaveStatus(isAuto ? 'Guardado automático (overrides.json)' : 'Guardado (overrides.json)')
-      } else {
-        setSaveStatus(`No se pudo guardar: ${data?.error || 'error'}`)
+        setSaveStatus(isAuto ? 'Guardado automático (local)' : 'Guardado (local)')
       }
     } catch {
-      setSaveStatus('No se pudo guardar (¿estás en npm run dev?)')
+      setSaveStatus('No se pudo guardar')
     } finally {
       setIsSaving(false)
     }
@@ -104,14 +153,98 @@ export default function HotspotEditorPage() {
 
   async function getNaturalSize(url) {
     try {
+      let src = url
+      let tempObjectUrl = null
+
+      if (isIdbUrl(url)) {
+        const key = idbUrlToKey(url)
+        if (key) {
+          const blob = await getSavedImageBlob(key)
+          if (blob) {
+            tempObjectUrl = URL.createObjectURL(blob)
+            src = tempObjectUrl
+          }
+        }
+      }
+
       const img = new Image()
-      img.src = url
+      img.src = src
       if (img.decode) await img.decode()
       if (img.naturalWidth && img.naturalHeight) return { width: img.naturalWidth, height: img.naturalHeight }
     } catch {
       // ignore
+    } finally {
+      try {
+        if (tempObjectUrl) URL.revokeObjectURL(tempObjectUrl)
+      } catch {
+        // ignore
+      }
     }
     return null
+  }
+
+  async function onUploadFiles(fileList) {
+    const files = Array.from(fileList || []).filter(Boolean)
+    if (!files.length) return
+
+    setSaveStatus('Subiendo imagen…')
+    try {
+      const file = files[0]
+      const saved = await saveImageFile(file)
+
+      const nextId = `subida-${Date.now()}`
+      const nextSlide = {
+        id: nextId,
+        title: file.name?.replace(/\.[^.]+$/, '') || 'Nueva diapositiva',
+        topic: 'Subidas',
+        tags: [],
+        difficulty: 1,
+        description: '',
+        imageUrl: saved.url,
+        thumbnailUrl: saved.url,
+        naturalSize: { width: 1, height: 1 },
+        hotspots: []
+      }
+
+      saveLocalSlide(nextSlide)
+
+      setLocalImages(await listSavedImages())
+      setSlideId(nextSlide.id)
+      setDraft(nextSlide)
+      lastSavedTextRef.current = JSON.stringify(nextSlide, null, 2)
+      setIsDirty(false)
+      setSaveStatus('Imagen subida. Edita y agrega hotspots.')
+    } catch {
+      setSaveStatus('No se pudo subir la imagen (¿Safari con modo privado?)')
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  function ImageTile({ url, label, selected, onSelect }) {
+    const resolved = useResolvedImageUrl(url)
+
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`group overflow-hidden rounded-2xl border bg-slate-950/30 text-left transition hover:bg-slate-950/50 ${
+          selected ? 'border-emerald-400/60' : 'border-slate-800/60'
+        }`}
+      >
+        <div className="relative aspect-[16/10]">
+          {resolved ? (
+            <img src={resolved} alt={label} className="absolute inset-0 h-full w-full object-cover" draggable={false} loading="lazy" />
+          ) : (
+            <div className="absolute inset-0 animate-pulse bg-white/5" />
+          )}
+          <div className="absolute inset-x-0 bottom-0 h-[70%] bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 p-3">
+            <div className="text-xs font-semibold text-white line-clamp-2 drop-shadow-sm">{label}</div>
+          </div>
+        </div>
+      </button>
+    )
   }
 
   function setSlideImages(url) {
@@ -280,6 +413,22 @@ export default function HotspotEditorPage() {
             Editar
           </button>
 
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => onUploadFiles(e.target.files)}
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+          >
+            Subir imagen
+          </button>
+
           <button
             type="button"
             disabled={!activeSlide || isSaving || !isDirty}
@@ -380,9 +529,9 @@ export default function HotspotEditorPage() {
       <div className="grid gap-3 rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="text-sm font-semibold">Imágenes en public/slides</div>
+            <div className="text-sm font-semibold">Imágenes</div>
             <div className="text-xs text-slate-500">
-              Selecciona una imagen para asignarla a la diapositiva. {images.length ? `${images.length} encontrada(s).` : 'No se detectaron imágenes.'}
+              Puedes usar imágenes de <code>public/slides</code> (solo en desarrollo) o subir desde tu iPad (se guardan en este dispositivo).
             </div>
           </div>
           <div className="text-xs text-slate-500">
@@ -390,32 +539,41 @@ export default function HotspotEditorPage() {
           </div>
         </div>
 
+        {localImages.length ? (
+          <div className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-300">Subidas (este dispositivo)</div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {localImages.map((it) => (
+                <ImageTile
+                  key={it.key}
+                  url={it.url}
+                  label={it.name || it.url}
+                  selected={activeSlide?.imageUrl === it.url}
+                  onSelect={() => setSlideImages(it.url)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {images.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {images.map((url) => (
-              <button
-                key={url}
-                type="button"
-                onClick={() => setSlideImages(url)}
-                className={`group overflow-hidden rounded-2xl border bg-slate-950/30 text-left transition hover:bg-slate-950/50 ${
-                  activeSlide?.imageUrl === url ? 'border-emerald-400/60' : 'border-slate-800/60'
-                }`}
-              >
-                <div className="relative aspect-[16/10]">
-                  <img src={url} alt={url} className="absolute inset-0 h-full w-full object-cover" draggable={false} loading="lazy" />
-                  <div className="absolute inset-x-0 bottom-0 h-[70%] bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
-                  <div className="absolute inset-x-0 bottom-0 p-3">
-                    <div className="text-xs font-semibold text-white line-clamp-2 drop-shadow-sm">
-                      {url.replace('/slides/', '')}
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))}
+          <div className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-300">public/slides (desarrollo)</div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {images.map((url) => (
+                <ImageTile
+                  key={url}
+                  url={url}
+                  label={url.replace('/slides/', '')}
+                  selected={activeSlide?.imageUrl === url}
+                  onSelect={() => setSlideImages(url)}
+                />
+              ))}
+            </div>
           </div>
         ) : (
           <div className="text-sm text-slate-300">
-            Coloca archivos en <code>public/slides</code> (png/jpg/webp/svg) y el menú se llenará automáticamente.
+            En GitHub Pages este listado no aparece. Usa <b>Subir imagen</b> para agregar desde el iPad.
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
@@ -12,6 +13,8 @@ function norm01(v) {
 export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail = true, immersive = false }) {
   const containerRef = useRef(null)
   const imgRef = useRef(null)
+
+  const resolvedImageUrl = useResolvedImageUrl(slide.imageUrl)
   const [selectedHotspotId, setSelectedHotspotId] = useState(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const lastTapRef = useRef({ id: null, t: 0 })
@@ -445,10 +448,10 @@ export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail =
         >
           <img
             ref={imgRef}
-            src={slide.imageUrl}
+            src={resolvedImageUrl}
             alt={slide.title}
-            draggable={false}
             className="select-none max-w-none"
+            draggable={false}
             style={{ width: imageSize.width, height: imageSize.height }}
             onLoad={(e) => {
               const img = e.currentTarget

@@ -1,9 +1,40 @@
 import overrides from './overrides.json'
 
+function getLocalOverrides() {
+  try {
+    if (typeof window === 'undefined') return null
+    const raw = window.localStorage.getItem('microlab:overrides_local')
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+const localOverrides = getLocalOverrides()
+
+function getLocalSlides() {
+  try {
+    if (typeof window === 'undefined') return []
+    const raw = window.localStorage.getItem('microlab:local_slides')
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((s) => s && typeof s === 'object' && typeof s.id === 'string')
+  } catch {
+    return []
+  }
+}
+
+const localSlides = getLocalSlides()
+
 function applyOverrides(item) {
   const o = overrides?.[item.id]
-  if (!o) return item
-  return { ...item, ...o }
+  const lo = localOverrides?.[item.id]
+  if (!o && !lo) return item
+  return { ...item, ...(o || {}), ...(lo || {}) }
 }
 
 function safeId(s) {
@@ -138,6 +169,6 @@ const baseSlides = [
   }
 ]
 
-export const slides = baseSlides.map(applyOverrides)
+export const slides = [...baseSlides, ...localSlides].map(applyOverrides)
 
 export const catalog = buildCatalog(slides)
