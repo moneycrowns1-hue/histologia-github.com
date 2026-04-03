@@ -52,7 +52,14 @@ export default function LoginPage() {
       setStatus('')
     } catch (err) {
       const msg = String(err?.message || 'error')
-      setStatus(`No se pudo iniciar sesión: ${msg}`)
+      const low = msg.toLowerCase()
+      if (low.includes('not confirmed') || low.includes('email not confirmed')) {
+        setStatus(
+          'No se pudo iniciar sesión: email no confirmado. En Supabase: Authentication → Providers → Email: desactiva “Confirm email” (o confirma manualmente el usuario en Authentication → Users).'
+        )
+      } else {
+        setStatus(`No se pudo iniciar sesión: ${msg}`)
+      }
     } finally {
       setBusy(false)
     }
