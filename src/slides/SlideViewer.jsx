@@ -10,7 +10,16 @@ function norm01(v) {
   return clamp(v, 0, 1)
 }
 
-export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail = true, immersive = false }) {
+export default function SlideViewer({
+  slide,
+  mode,
+  onHotspotSelect,
+  showDetail = true,
+  immersive = false,
+  showHotspots = true,
+  focusTarget = null,
+  overlayPin = null
+}) {
   const containerRef = useRef(null)
   const imgRef = useRef(null)
 
@@ -130,6 +139,29 @@ export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail =
     lastRef.current = { ...lastRef.current, x, y, scale, pinchDist: null }
   }
 
+  function focusAt(normX, normY, nextScale) {
+    const W = imageSize.width
+    const H = imageSize.height
+    if (!W || !H) return
+    const posX = norm01(normX) * W - W / 2
+    const posY = norm01(normY) * H - H / 2
+    const scale = clamp(nextScale ?? view.scale, 1, 12)
+    const x = -posX * scale
+    const y = -posY * scale
+    setView({ x, y, scale })
+    lastRef.current = { ...lastRef.current, x, y, scale, pinchDist: null }
+  }
+
+  useEffect(() => {
+    if (!focusTarget) return
+    const x = Number(focusTarget?.x)
+    const y = Number(focusTarget?.y)
+    const scale = Number(focusTarget?.scale)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
+    const s = Number.isFinite(scale) ? scale : 2.4
+    focusAt(x, y, s)
+  }, [focusTarget?.x, focusTarget?.y, focusTarget?.scale, slide.id, imageSize.width, imageSize.height])
+
   function getHotspotScreenPos(h) {
     const el = containerRef.current
     if (!el) return null
@@ -139,6 +171,21 @@ export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail =
     const H = imageSize.height
     const px = (norm01(h.x) * W - W / 2) * view.scale + view.x
     const py = (norm01(h.y) * H - H / 2) * view.scale + view.y
+    return {
+      rect,
+      x: rect.width / 2 + px,
+      y: rect.height / 2 + py
+    }
+  }
+
+  function getNormScreenPos(normX, normY) {
+    const el = containerRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    const W = imageSize.width
+    const H = imageSize.height
+    const px = (norm01(normX) * W - W / 2) * view.scale + view.x
+    const py = (norm01(normY) * H - H / 2) * view.scale + view.y
     return {
       rect,
       x: rect.width / 2 + px,
@@ -321,6 +368,16 @@ export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail =
             from { opacity: 0; transform: translateY(6px) scale(0.96); }
             to { opacity: 1; transform: translateY(0px) scale(1); }
           }
+
+          @keyframes microlabPinPulse {
+            0% { transform: translate(-50%, -100%) scale(1); box-shadow: 0 0 0 0 rgba(34,211,238,0.25); }
+            70% { transform: translate(-50%, -100%) scale(1.04); box-shadow: 0 0 0 14px rgba(34,211,238,0); }
+            100% { transform: translate(-50%, -100%) scale(1); box-shadow: 0 0 0 0 rgba(34,211,238,0); }
+          }
+          @keyframes microlabPinHit {
+            from { transform: translate(-50%, -100%) scale(0.94); opacity: 0; }
+            to { transform: translate(-50%, -100%) scale(1); opacity: 1; }
+          }
         `}</style>
       ) : null}
       <div
@@ -344,6 +401,53 @@ export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail =
           setDetailOpen(false)
         }}
       >
+        {overlayPin ? (
+          (() => {
+            const p = getNormScreenPos(overlayPin?.x, overlayPin?.y)
+            if (!p) return null
+            const state = String(overlayPin?.state || 'idle')
+            const isCorrect = state === 'correct'
+            const isIncorrect = state === 'incorrect'
+            const pinColor = isCorrect ? '#10b981' : isIncorrect ? '#e11d48' : '#22d3ee'
+            const lineColor = isCorrect ? 'rgba(16,185,129,0.85)' : isIncorrect ? 'rgba(225,29,72,0.85)' : 'rgba(34,211,238,0.75)'
+
+            const labelW = 44
+            const labelH = 28
+            const pad = 12
+            const left = clamp(p.x + 16, pad, p.rect.width - labelW - pad)
+            const top = clamp(p.y - 54, pad, p.rect.height - labelH - pad)
+            const x2 = left
+            const y2 = top + labelH / 2
+
+            return (
+              <div className="pointer-events-none absolute inset-0 z-20">
+                <svg className="absolute inset-0" width="100%" height="100%" style={{ overflow: 'visible' }}>
+                  <line x1={p.x} y1={p.y} x2={x2} y2={y2} stroke={lineColor} strokeWidth={2.2} strokeLinecap="round" />
+                </svg>
+                <div
+                  className="absolute grid place-items-center rounded-2xl border text-sm font-extrabold"
+                  style={{
+                    left,
+                    top,
+                    width: labelW,
+                    height: labelH,
+                    color: isCorrect ? '#022c22' : isIncorrect ? '#2b020a' : '#001a1f',
+                    background: pinColor,
+                    borderColor: 'rgba(255,255,255,0.14)',
+                    animation: (state === 'pulse' ? 'microlabPinPulse 1100ms ease-in-out infinite' : 'microlabPinHit 140ms ease-out')
+                  }}
+                >
+                  ?
+                </div>
+                <div
+                  className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                  style={{ left: p.x, top: p.y, background: pinColor, boxShadow: '0 0 0 6px rgba(0,0,0,0.25)' }}
+                />
+              </div>
+            )
+          })()
+        ) : null}
+
         {/* Popover flotante (anclado a punto) */}
         {immersive && showDetail && detailOpen && selectedHotspot ? (
           (() => {
@@ -464,7 +568,8 @@ export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail =
 
         {/* Overlay UI en píxeles (NO escala con zoom) */}
         <div className="pointer-events-none absolute inset-0 z-20">
-          {(() => {
+          {showHotspots
+          ? (() => {
             const items = slide.hotspots
               .map((h) => {
                 const p = getLabelPlacement(h)
@@ -600,7 +705,8 @@ export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail =
                 </div>
               )
             })
-          })()}
+          })()
+          : null}
 
           {immersive && hudEnabled ? (
             <div className="pointer-events-none absolute left-3 top-3 rounded-xl bg-black/55 px-3 py-2 text-[11px] font-semibold text-white backdrop-blur-sm">
