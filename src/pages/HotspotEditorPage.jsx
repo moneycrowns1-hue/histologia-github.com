@@ -36,7 +36,17 @@ export default function HotspotEditorPage() {
   const autosaveTimerRef = useRef(null)
   const lastSavedTextRef = useRef('')
 
+  const toastTimerRef = useRef(null)
+
   const activeSlide = draft && baseSlide && draft.id === baseSlide.id ? draft : baseSlide
+
+  function showToast(message, type) {
+    setSaveStatus(type === 'error' ? `error:${message}` : `ok:${message}`)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => {
+      setSaveStatus('')
+    }, 2400)
+  }
 
   useEffect(() => {
     let alive = true
@@ -81,6 +91,13 @@ export default function HotspotEditorPage() {
     setSlideId(requested)
     setDraft(null)
   }, [searchParams, slideId])
+
+  useEffect(() => {
+    if (!baseSlide) return
+    if (draft && draft.id === baseSlide.id) return
+    lastSavedTextRef.current = JSON.stringify(baseSlide, null, 2)
+    setIsDirty(false)
+  }, [baseSlide?.id])
 
   useEffect(() => {
     if (!slideId) return
@@ -201,13 +218,13 @@ export default function HotspotEditorPage() {
     if (!slide) return
     const text = JSON.stringify(slide, null, 2)
     if (text === lastSavedTextRef.current) {
-      if (!isAuto) setSaveStatus('Sin cambios para guardar.')
+      if (!isAuto) showToast('Sin cambios para guardar.', 'ok')
       return
     }
 
     try {
       setIsSaving(true)
-      setSaveStatus(isAuto ? 'Guardando…' : 'Guardando…')
+      if (!isAuto) showToast('Guardando…', 'ok')
       try {
         const res = await fetch('/__editor_save', {
           method: 'POST',
@@ -216,21 +233,25 @@ export default function HotspotEditorPage() {
         })
         const data = await res.json().catch(() => ({}))
         if (data?.ok) {
+          saveLocalOverride(slide)
           lastSavedTextRef.current = text
           setIsDirty(false)
-          setSaveStatus(isAuto ? 'Guardado automático (overrides.json)' : 'Guardado (overrides.json)')
+          if (!isAuto) showToast('Guardado.', 'ok')
           return
         }
-        setSaveStatus(`No se pudo guardar: ${data?.error || 'error'}`)
+        saveLocalOverride(slide)
+        lastSavedTextRef.current = text
+        setIsDirty(false)
+        if (!isAuto) showToast(`No se pudo guardar en archivo. Guardado local: ${data?.error || 'error'}`, 'error')
       } catch {
         // Fallback (GitHub Pages / iPad): persistir localmente.
         saveLocalOverride(slide)
         lastSavedTextRef.current = text
         setIsDirty(false)
-        setSaveStatus(isAuto ? 'Guardado automático (local)' : 'Guardado (local)')
+        if (!isAuto) showToast('Guardado local.', 'ok')
       }
     } catch {
-      setSaveStatus('No se pudo guardar')
+      if (!isAuto) showToast('No se pudo guardar.', 'error')
     } finally {
       setIsSaving(false)
     }
@@ -319,6 +340,7 @@ export default function HotspotEditorPage() {
   useEffect(() => {
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
   }, [])
 
@@ -497,7 +519,19 @@ export default function HotspotEditorPage() {
         onAddHotspot={addHotspotAt}
       />
 
-      {saveStatus ? <div className="text-xs text-slate-500">{saveStatus}</div> : null}
+      {saveStatus ? (
+        <div className="fixed bottom-4 right-4 z-[200]">
+          <div
+            className={`max-w-[320px] rounded-2xl border px-4 py-3 text-sm font-semibold shadow-[0_20px_60px_-30px_rgba(0,0,0,0.9)] backdrop-blur-sm transition ${
+              saveStatus.startsWith('error:')
+                ? 'border-red-500/30 bg-red-500/15 text-red-100'
+                : 'border-emerald-500/30 bg-emerald-500/15 text-emerald-100'
+            }`}
+          >
+            {saveStatus.replace(/^error:/, '').replace(/^ok:/, '')}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

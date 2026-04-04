@@ -155,6 +155,8 @@ export default function LibraryPage() {
   const navigate = useNavigate()
   const [catalog, setCatalog] = useState(() => getCatalog())
 
+  const [deletingIds, setDeletingIds] = useState(() => new Set())
+
   const [createOpen, setCreateOpen] = useState(false)
   const [createTitle, setCreateTitle] = useState('')
   const [createTopic, setCreateTopic] = useState('')
@@ -345,6 +347,16 @@ export default function LibraryPage() {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0px); }
         }
+
+        @keyframes microlabDeleteOut {
+          from { opacity: 1; transform: scale(1); filter: blur(0px); }
+          to { opacity: 0; transform: scale(0.96); filter: blur(2px); }
+        }
+
+        .microlab-card-deleting {
+          animation: microlabDeleteOut 180ms ease-in both;
+          pointer-events: none;
+        }
       `}</style>
       <div className="mb-5">
         <div className="px-1">
@@ -432,6 +444,7 @@ export default function LibraryPage() {
               {c.items.map((s) => (
                 <div
                   key={s.id}
+                  className={deletingIds.has(s.id) ? 'microlab-card-deleting' : ''}
                   onContextMenu={(e) => {
                     e.preventDefault()
                     setMenuSlide(s)
@@ -582,7 +595,21 @@ export default function LibraryPage() {
               onClick={() => {
                 const id = menuSlide.id
                 setMenuSlide(null)
-                removeLocalSlideAndOverrides(id)
+                setDeletingIds((prev) => {
+                  const next = new Set(prev)
+                  next.add(id)
+                  return next
+                })
+
+                window.setTimeout(() => {
+                  removeLocalSlideAndOverrides(id)
+                  setCatalog(getCatalog())
+                  setDeletingIds((prev) => {
+                    const next = new Set(prev)
+                    next.delete(id)
+                    return next
+                  })
+                }, 190)
               }}
               className="w-full rounded-2xl px-3 py-3 text-left text-base font-extrabold text-red-300 hover:bg-red-500/10"
             >
