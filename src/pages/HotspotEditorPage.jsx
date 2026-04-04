@@ -37,6 +37,7 @@ export default function HotspotEditorPage() {
   const lastSavedTextRef = useRef('')
 
   const toastTimerRef = useRef(null)
+  const lastAutoToastAtRef = useRef(0)
 
   const activeSlide = draft && baseSlide && draft.id === baseSlide.id ? draft : baseSlide
 
@@ -222,6 +223,14 @@ export default function HotspotEditorPage() {
       return
     }
 
+    const maybeAutoToast = () => {
+      if (!isAuto) return
+      const now = Date.now()
+      if (now - (lastAutoToastAtRef.current || 0) < 3500) return
+      lastAutoToastAtRef.current = now
+      showToast('Guardado.', 'ok')
+    }
+
     try {
       setIsSaving(true)
       if (!isAuto) showToast('Guardando…', 'ok')
@@ -237,18 +246,21 @@ export default function HotspotEditorPage() {
           lastSavedTextRef.current = text
           setIsDirty(false)
           if (!isAuto) showToast('Guardado.', 'ok')
+          else maybeAutoToast()
           return
         }
         saveLocalOverride(slide)
         lastSavedTextRef.current = text
         setIsDirty(false)
         if (!isAuto) showToast(`No se pudo guardar en archivo. Guardado local: ${data?.error || 'error'}`, 'error')
+        else maybeAutoToast()
       } catch {
         // Fallback (GitHub Pages / iPad): persistir localmente.
         saveLocalOverride(slide)
         lastSavedTextRef.current = text
         setIsDirty(false)
         if (!isAuto) showToast('Guardado local.', 'ok')
+        else maybeAutoToast()
       }
     } catch {
       if (!isAuto) showToast('No se pudo guardar.', 'error')

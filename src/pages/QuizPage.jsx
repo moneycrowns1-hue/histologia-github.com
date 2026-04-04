@@ -19,6 +19,7 @@ export default function QuizPage() {
   const [questionCount, setQuestionCount] = useState(8)
 
   const [session, setSession] = useState(null)
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false)
 
   const availableSlides = useMemo(() => {
     if (categoryId === 'all') return allSlides
@@ -77,6 +78,7 @@ export default function QuizPage() {
 
   function stop() {
     setSession(null)
+    setConfirmExitOpen(false)
   }
 
   function onPickHotspot(hotspot) {
@@ -124,13 +126,39 @@ export default function QuizPage() {
         {session ? (
           <button
             type="button"
-            onClick={stop}
+            onClick={() => setConfirmExitOpen(true)}
             className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
           >
             Salir
           </button>
         ) : null}
       </div>
+
+      {confirmExitOpen ? (
+        <div className="fixed inset-0 z-[200] grid place-items-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950 p-5 text-white shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
+            <div className="text-lg font-extrabold">¿Salir del quiz?</div>
+            <div className="mt-1 text-sm text-slate-300">Perderás el progreso de esta sesión.</div>
+
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmExitOpen(false)}
+                className="h-12 rounded-2xl bg-white/10 px-4 text-base font-extrabold text-white transition active:scale-[0.99] hover:bg-white/15"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={stop}
+                className="h-12 rounded-2xl bg-emerald-500 px-4 text-base font-extrabold text-emerald-950 transition active:scale-[0.99] hover:bg-emerald-400"
+              >
+                Sí, salir
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {!session && (
         <div className="grid gap-3 rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">

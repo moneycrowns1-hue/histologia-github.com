@@ -38,13 +38,20 @@ export default function FlashcardsPage() {
   const [deckId, setDeckId] = useState('all')
   const [limit, setLimit] = useState(12)
   const [mode, setMode] = useState('adaptive')
-  const [autoAdvance, setAutoAdvance] = useState(true)
+  const [autoAdvance, setAutoAdvance] = useState(() => {
+    try {
+      return localStorage.getItem('microlab:flashcards:autoAdvance') === '1'
+    } catch {
+      return false
+    }
+  })
 
   const [session, setSession] = useState(null)
   const [flipped, setFlipped] = useState(false)
   const [pendingAdvance, setPendingAdvance] = useState(false)
   const [lastNextLabel, setLastNextLabel] = useState('')
   const [animPhase, setAnimPhase] = useState('')
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false)
 
   const [progress, setProgress] = useState(() => loadProgress())
   const perf = useMemo(() => computeCardStats(progress), [progress])
@@ -205,6 +212,7 @@ export default function FlashcardsPage() {
     setPendingAdvance(false)
     setLastNextLabel('')
     setAnimPhase('')
+    setConfirmExitOpen(false)
   }
 
   const current = session ? session.queue[session.index] : null
@@ -293,13 +301,39 @@ export default function FlashcardsPage() {
         {session ? (
           <button
             type="button"
-            onClick={stop}
+            onClick={() => setConfirmExitOpen(true)}
             className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
           >
             Salir
           </button>
         ) : null}
       </div>
+
+      {confirmExitOpen ? (
+        <div className="fixed inset-0 z-[200] grid place-items-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950 p-5 text-white shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
+            <div className="text-lg font-extrabold">¿Salir del repaso?</div>
+            <div className="mt-1 text-sm text-slate-300">Perderás el progreso de esta sesión (no tus estadísticas).</div>
+
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmExitOpen(false)}
+                className="h-12 rounded-2xl bg-white/10 px-4 text-base font-extrabold text-white transition active:scale-[0.99] hover:bg-white/15"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={stop}
+                className="h-12 rounded-2xl bg-emerald-500 px-4 text-base font-extrabold text-emerald-950 transition active:scale-[0.99] hover:bg-emerald-400"
+              >
+                Sí, salir
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {!session && (
         <div className="grid gap-3 rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">

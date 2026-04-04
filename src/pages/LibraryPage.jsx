@@ -151,7 +151,7 @@ function SlideCard({ slide, isFavorite, onToggleFavorite, priority = false }) {
   )
 }
 
-export default function LibraryPage() {
+export default function LibraryPage({ canEdit = false }) {
   const navigate = useNavigate()
   const [catalog, setCatalog] = useState(() => getCatalog())
 
@@ -404,17 +404,19 @@ export default function LibraryPage() {
             Favoritos
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setCreateTitle('')
-              setCreateTopic('')
-              setCreateOpen(true)
-            }}
-            className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-500 px-4 text-[15px] font-extrabold text-emerald-950 transition active:scale-[0.99] hover:bg-emerald-400 md:h-12 md:text-base"
-          >
-            + Nueva diapositiva
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={() => {
+                setCreateTitle('')
+                setCreateTopic('')
+                setCreateOpen(true)
+              }}
+              className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-500 px-4 text-[15px] font-extrabold text-emerald-950 transition active:scale-[0.99] hover:bg-emerald-400 md:h-12 md:text-base"
+            >
+              + Nueva diapositiva
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -446,11 +448,13 @@ export default function LibraryPage() {
                   key={s.id}
                   className={deletingIds.has(s.id) ? 'microlab-card-deleting' : ''}
                   onContextMenu={(e) => {
+                    if (!canEdit) return
                     e.preventDefault()
                     setMenuSlide(s)
                   }}
                   onTouchStart={() => {
                     // long press
+                    if (!canEdit) return
                     const t = setTimeout(() => setMenuSlide(s), 420)
                     const clear = () => clearTimeout(t)
                     window.addEventListener('touchend', clear, { once: true })
@@ -529,7 +533,7 @@ export default function LibraryPage() {
         }}
       />
 
-      {createOpen ? (
+      {createOpen && canEdit ? (
         <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950 p-5 text-white shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
             <div className="text-lg font-extrabold">Nueva diapositiva</div>
@@ -575,7 +579,7 @@ export default function LibraryPage() {
         </div>
       ) : null}
 
-      {menuSlide ? (
+      {menuSlide && canEdit ? (
         <div className="fixed inset-0 z-[95] bg-black/70" onClick={() => setMenuSlide(null)}>
           <div className="absolute inset-x-4 bottom-4 mx-auto max-w-md rounded-3xl border border-white/10 bg-slate-950 p-3 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
             <div className="px-3 py-2 text-sm font-bold text-white truncate">{menuSlide.title}</div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { cloudGetUser, cloudSignOut, cloudUpdateProfile } from '../utils/supabaseSync.js'
 
 const roleOptions = [
+  { value: 'read', label: 'Lectura (solo ver)' },
   { value: 'amigo', label: 'Amigo' },
   { value: 'estudiante', label: 'Estudiante' },
   { value: 'editor', label: 'Editor' }

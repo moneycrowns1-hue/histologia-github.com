@@ -19,12 +19,16 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
 
+  const [confirmSignOutOpen, setConfirmSignOutOpen] = useState(false)
+  const [signOutBusy, setSignOutBusy] = useState(false)
+
   const role = useMemo(() => {
     const r = String(user?.user_metadata?.role || '').trim().toLowerCase()
     return r
   }, [user])
 
   const isEditor = role === 'editor'
+  const canEditSlides = isEditor
 
   useEffect(() => {
     let alive = true
@@ -161,11 +165,7 @@ export default function App() {
           <button
             type="button"
             onClick={async () => {
-              try {
-                await cloudSignOut()
-              } catch {
-                // ignore
-              }
+              setConfirmSignOutOpen(true)
             }}
             className="hidden rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 md:inline-block"
             title={user?.email || 'Cerrar sesión'}
@@ -175,10 +175,52 @@ export default function App() {
         </div>
       </header>
 
+      {confirmSignOutOpen ? (
+        <div className="fixed inset-0 z-[200] grid place-items-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950 p-5 text-white shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
+            <div className="text-lg font-extrabold">¿Salir?</div>
+            <div className="mt-1 text-sm text-slate-300">¿Seguro que quieres cerrar sesión?</div>
+
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={signOutBusy}
+                onClick={() => setConfirmSignOutOpen(false)}
+                className={`h-12 rounded-2xl px-4 text-base font-extrabold transition active:scale-[0.99] ${
+                  signOutBusy ? 'bg-white/10 text-slate-400' : 'bg-white/10 text-white hover:bg-white/15'
+                }`}
+              >
+                No
+              </button>
+              <button
+                type="button"
+                disabled={signOutBusy}
+                onClick={async () => {
+                  try {
+                    setSignOutBusy(true)
+                    await cloudSignOut()
+                  } catch {
+                    // ignore
+                  } finally {
+                    setSignOutBusy(false)
+                    setConfirmSignOutOpen(false)
+                  }
+                }}
+                className={`h-12 rounded-2xl px-4 text-base font-extrabold transition active:scale-[0.99] ${
+                  signOutBusy ? 'bg-white/10 text-slate-400' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400'
+                }`}
+              >
+                Sí, salir
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/biblioteca" element={<LibraryPage />} />
+          <Route path="/biblioteca" element={<LibraryPage canEdit={canEditSlides} />} />
           <Route path="/visor" element={<ViewerPage />} />
           <Route path="/quiz" element={<QuizPage />} />
           <Route

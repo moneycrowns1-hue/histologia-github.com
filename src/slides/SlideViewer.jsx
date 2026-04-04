@@ -564,9 +564,11 @@ export default function SlideViewer({ slide, mode, onHotspotSelect, showDetail =
                     }}
                     onClick={(e) => {
                       e.stopPropagation()
-                      setSelectedHotspotId(h.id)
-                      if (immersive) setDetailOpen(true)
-                      if (onHotspotSelect) onHotspotSelect(h)
+                      if (immersive) openHotspotDetail(h.id, h)
+                      else {
+                        setSelectedHotspotId(h.id)
+                        if (onHotspotSelect) onHotspotSelect(h)
+                      }
                     }}
                     onDoubleClick={(e) => {
                       e.stopPropagation()
