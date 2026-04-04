@@ -79,7 +79,9 @@ function RecentStory({ slide, isFavorite }) {
         </div>
       </div>
       <div className="w-full px-1 text-center text-[11px] font-semibold text-slate-200 md:text-[12px]">
-        <div className="truncate">{slide.title}</div>
+        <div className="grid min-h-[32px] w-full items-center overflow-hidden">
+          <div className="w-full overflow-hidden text-ellipsis line-clamp-2 leading-[1.15]">{slide.title}</div>
+        </div>
       </div>
     </Link>
   )
