@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import SlideViewer from '../slides/SlideViewer.jsx'
 import { getCatalog, subscribeSlides } from '../slides/slides.js'
+import { pushNotification } from '../notifications/notifications.js'
 
 export default function QuizPage() {
   const [catalog, setCatalog] = useState(() => getCatalog())
@@ -202,6 +203,41 @@ export default function QuizPage() {
   }
 
   const done = session && session.index >= questions.length
+
+  const pointResultNotifiedRef = useRef(false)
+  const medicalResultNotifiedRef = useRef(false)
+
+  useEffect(() => {
+    if (!session || !done) {
+      pointResultNotifiedRef.current = false
+      return
+    }
+    if (pointResultNotifiedRef.current) return
+    pointResultNotifiedRef.current = true
+
+    pushNotification({
+      type: 'success',
+      title: 'Quiz completado',
+      message: `Identificar Punto: ${session.correct} / ${questions.length}`,
+      meta: { mode: 'point', correct: session.correct, total: questions.length }
+    })
+  }, [done, questions.length, session])
+
+  useEffect(() => {
+    if (!medicalSession || !medicalDone) {
+      medicalResultNotifiedRef.current = false
+      return
+    }
+    if (medicalResultNotifiedRef.current) return
+    medicalResultNotifiedRef.current = true
+
+    pushNotification({
+      type: 'success',
+      title: 'Medical Quiz completado',
+      message: `Resultado: ${medicalSession.correct} / ${medicalQuestions.length}`,
+      meta: { mode: 'medical', correct: medicalSession.correct, total: medicalQuestions.length }
+    })
+  }, [medicalDone, medicalQuestions.length, medicalSession])
 
   if (allSlides.length === 0) {
     return (
@@ -450,29 +486,6 @@ export default function QuizPage() {
                 }}
               />
             </div>
-
-            <div className="border-t border-slate-800/60 p-4">
-              <div className="flex gap-1.5">
-                {medicalQuestions.map((_, i) => {
-                  const doneSeg = i < medicalIndex
-                  const activeSeg = i === medicalIndex
-                  return (
-                    <div
-                      key={i}
-                      className="h-2 flex-1 rounded-full"
-                      style={{
-                        background: doneSeg
-                          ? 'linear-gradient(90deg, rgba(34,211,238,0.95), rgba(56,189,248,0.75))'
-                          : activeSeg
-                            ? 'linear-gradient(90deg, rgba(34,211,238,0.35), rgba(56,189,248,0.25))'
-                            : 'rgba(255,255,255,0.06)',
-                        boxShadow: doneSeg ? '0 0 0 1px rgba(34,211,238,0.18), 0 0 18px rgba(34,211,238,0.25)' : '0 0 0 1px rgba(255,255,255,0.06)'
-                      }}
-                    />
-                  )
-                })}
-              </div>
-            </div>
           </div>
 
           <div className="grid gap-3">
@@ -563,6 +576,31 @@ export default function QuizPage() {
               >
                 Siguiente
               </button>
+
+              <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                <div className="flex gap-1.5">
+                  {medicalQuestions.map((_, i) => {
+                    const doneSeg = i < medicalIndex
+                    const activeSeg = i === medicalIndex
+                    return (
+                      <div
+                        key={i}
+                        className="h-2 flex-1 rounded-full"
+                        style={{
+                          background: doneSeg
+                            ? 'linear-gradient(90deg, rgba(34,211,238,0.95), rgba(56,189,248,0.75))'
+                            : activeSeg
+                              ? 'linear-gradient(90deg, rgba(34,211,238,0.35), rgba(56,189,248,0.25))'
+                              : 'rgba(255,255,255,0.06)',
+                          boxShadow: doneSeg
+                            ? '0 0 0 1px rgba(34,211,238,0.18), 0 0 18px rgba(34,211,238,0.25)'
+                            : '0 0 0 1px rgba(255,255,255,0.06)'
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
             </div>
 
             <button

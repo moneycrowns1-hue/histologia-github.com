@@ -4,6 +4,7 @@ import { getSlides, subscribeSlides } from '../slides/slides.js'
 import { getSavedImageBlob, idbUrlToKey, isIdbUrl } from '../utils/localImages.js'
 import { useSearchParams } from 'react-router-dom'
 import { useToast } from '../toast/ToastProvider.jsx'
+import { pushNotification } from '../notifications/notifications.js'
 import {
   cloudIsReady,
   cloudGetUser,
@@ -124,8 +125,20 @@ export default function HotspotEditorPage() {
       const uploaded = await cloudUpsertSlide(activeSlide)
       saveLocalSlide(uploaded)
       toast({ type: 'success', title: 'Nube', message: 'Guardado en la nube.' })
+      pushNotification({
+        type: 'success',
+        title: 'Editor',
+        message: `Guardado en la nube: ${activeSlide?.title || activeSlide?.id || 'diapositiva'}`,
+        meta: { source: 'editor', action: 'cloud_save', slideId: activeSlide?.id || null }
+      })
     } catch (e) {
       toast({ type: 'error', title: 'Nube', message: `No se pudo guardar en la nube: ${e?.message || 'error'}` })
+      pushNotification({
+        type: 'error',
+        title: 'Editor',
+        message: `No se pudo guardar en la nube: ${e?.message || 'error'}`,
+        meta: { source: 'editor', action: 'cloud_save', slideId: activeSlide?.id || null }
+      })
     } finally {
       setIsSaving(false)
     }
@@ -154,9 +167,21 @@ export default function HotspotEditorPage() {
       const next = Array.from(map.values())
       localStorage.setItem('microlab:local_slides', JSON.stringify(next))
       toast({ type: 'success', title: 'Nube', message: 'Importado. Recargando…', durationMs: 1800 })
+      pushNotification({
+        type: 'success',
+        title: 'Editor',
+        message: `Importado desde la nube: ${cloudSlides?.length || 0} diapositiva(s).`,
+        meta: { source: 'editor', action: 'cloud_import', count: cloudSlides?.length || 0 }
+      })
       window.location.reload()
     } catch (e) {
       toast({ type: 'error', title: 'Nube', message: `No se pudo importar desde la nube: ${e?.message || 'error'}` })
+      pushNotification({
+        type: 'error',
+        title: 'Editor',
+        message: `No se pudo importar desde la nube: ${e?.message || 'error'}`,
+        meta: { source: 'editor', action: 'cloud_import' }
+      })
     } finally {
       setIsSaving(false)
     }
@@ -245,25 +270,58 @@ export default function HotspotEditorPage() {
           saveLocalOverride(slide)
           lastSavedTextRef.current = text
           setIsDirty(false)
-          if (!isAuto) showToast('Guardado.', 'ok')
+          if (!isAuto) {
+            showToast('Guardado.', 'ok')
+            pushNotification({
+              type: 'success',
+              title: 'Editor',
+              message: `Guardado: ${slide?.title || slide?.id || 'diapositiva'}`,
+              meta: { source: 'editor', action: 'save', slideId: slide?.id || null }
+            })
+          }
           else maybeAutoToast()
           return
         }
         saveLocalOverride(slide)
         lastSavedTextRef.current = text
         setIsDirty(false)
-        if (!isAuto) showToast(`No se pudo guardar en archivo. Guardado local: ${data?.error || 'error'}`, 'error')
+        if (!isAuto) {
+          const msg = `No se pudo guardar en archivo. Guardado local: ${data?.error || 'error'}`
+          showToast(msg, 'error')
+          pushNotification({
+            type: 'warning',
+            title: 'Editor',
+            message: msg,
+            meta: { source: 'editor', action: 'save', slideId: slide?.id || null }
+          })
+        }
         else maybeAutoToast()
       } catch {
         // Fallback (GitHub Pages / iPad): persistir localmente.
         saveLocalOverride(slide)
         lastSavedTextRef.current = text
         setIsDirty(false)
-        if (!isAuto) showToast('Guardado local.', 'ok')
+        if (!isAuto) {
+          showToast('Guardado local.', 'ok')
+          pushNotification({
+            type: 'success',
+            title: 'Editor',
+            message: `Guardado local: ${slide?.title || slide?.id || 'diapositiva'}`,
+            meta: { source: 'editor', action: 'save_local', slideId: slide?.id || null }
+          })
+        }
         else maybeAutoToast()
       }
     } catch {
-      if (!isAuto) showToast('No se pudo guardar.', 'error')
+      if (!isAuto) {
+        showToast('No se pudo guardar.', 'error')
+        pushNotification({
+          type: 'error',
+          title: 'Editor',
+          message: 'No se pudo guardar.',
+          meta: { source: 'editor', action: 'save', slideId: slide?.id || null }
+        })
+      }
     } finally {
       setIsSaving(false)
     }
