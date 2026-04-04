@@ -422,7 +422,7 @@ export default function QuizPage() {
       )}
 
       {activeMedical && !medicalDone && medicalSlide && medicalTarget && (
-        <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
+        <div className="grid gap-3 lg:grid-cols-[520px_1fr]">
           <div className="relative overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-900/20">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/60 p-4">
               <div>
@@ -435,7 +435,7 @@ export default function QuizPage() {
               </div>
             </div>
 
-            <div className="relative h-[62vh]">
+            <div className="relative h-[46vh]">
               <SlideViewer
                 slide={medicalSlide}
                 mode="study"
@@ -477,14 +477,14 @@ export default function QuizPage() {
 
           <div className="grid gap-3">
             <div
-              className="rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-md"
+              className="rounded-2xl border border-white/10 bg-black/30 p-5 backdrop-blur-md"
               style={{
                 background: 'linear-gradient(180deg, rgba(15,23,42,0.55), rgba(2,6,23,0.55))',
                 boxShadow: '0 0 0 1px rgba(255,255,255,0.06), 0 30px 80px -50px rgba(0,0,0,0.9)'
               }}
             >
               <div className="text-xs font-semibold tracking-[0.22em] text-slate-500">OPCIONES</div>
-              <div className="mt-3 grid gap-2">
+              <div className="mt-3 grid gap-3">
                 {medicalOptions.map((opt) => {
                   const picked = medicalAnswer?.id === opt.id
                   const locked = Boolean(medicalAnswer)
@@ -513,7 +513,7 @@ export default function QuizPage() {
                       type="button"
                       disabled={locked}
                       onClick={() => pickMedical(opt)}
-                      className={`group w-full rounded-2xl px-4 py-3 text-left transition ${
+                      className={`group w-full rounded-2xl px-5 py-5 text-left transition ${
                         locked ? 'opacity-90' : 'hover:bg-white/7 active:scale-[0.99]'
                       } ring-1 ${baseRing} ${baseBg}`}
                       style={{
@@ -522,14 +522,14 @@ export default function QuizPage() {
                       }}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="grid h-8 w-8 place-items-center rounded-xl bg-black/40 text-sm font-extrabold text-cyan-100 ring-1 ring-white/10">
+                        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-black/40 text-base font-extrabold text-cyan-100 ring-1 ring-white/10">
                           {opt.letter}
                         </div>
                         <div className="min-w-0">
-                          <div className="text-sm font-semibold text-white transition group-hover:text-white">
+                          <div className="text-base font-semibold text-white transition group-hover:text-white">
                             {opt.label}
                           </div>
-                          <div className="mt-1 text-xs text-slate-400">Selecciona la mejor respuesta.</div>
+                          <div className="mt-1 text-sm text-slate-300">Selecciona la mejor respuesta.</div>
                         </div>
                       </div>
                     </button>

@@ -3,6 +3,7 @@ import HotspotEditor from '../slides/HotspotEditor.jsx'
 import { getSlides, subscribeSlides } from '../slides/slides.js'
 import { getSavedImageBlob, idbUrlToKey, isIdbUrl } from '../utils/localImages.js'
 import { useSearchParams } from 'react-router-dom'
+import { useToast } from '../toast/ToastProvider.jsx'
 import {
   cloudIsReady,
   cloudGetUser,
@@ -19,6 +20,7 @@ function safeId(s) {
 }
 
 export default function HotspotEditorPage() {
+  const { toast } = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [allSlides, setAllSlides] = useState(() => getSlides())
 
@@ -26,7 +28,6 @@ export default function HotspotEditorPage() {
   const baseSlide = useMemo(() => allSlides.find((s) => s.id === slideId) || allSlides[0] || null, [allSlides, slideId])
 
   const [draft, setDraft] = useState(null)
-  const [saveStatus, setSaveStatus] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
 
@@ -36,17 +37,16 @@ export default function HotspotEditorPage() {
   const autosaveTimerRef = useRef(null)
   const lastSavedTextRef = useRef('')
 
-  const toastTimerRef = useRef(null)
   const lastAutoToastAtRef = useRef(0)
 
   const activeSlide = draft && baseSlide && draft.id === baseSlide.id ? draft : baseSlide
 
   function showToast(message, type) {
-    setSaveStatus(type === 'error' ? `error:${message}` : `ok:${message}`)
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = setTimeout(() => {
-      setSaveStatus('')
-    }, 2400)
+    toast({
+      type: type === 'error' ? 'error' : 'success',
+      message,
+      durationMs: 2400
+    })
   }
 
   useEffect(() => {
@@ -109,23 +109,23 @@ export default function HotspotEditorPage() {
 
   async function cloudUploadActive() {
     if (!isEditor) {
-      setSaveStatus('No tienes permiso para usar la nube. Cambia tu rol a Editor en Perfil.')
+      toast({ type: 'warning', title: 'Sin permisos', message: 'No tienes permiso para usar la nube. Cambia tu rol a Editor en Perfil.' })
       return
     }
     if (!cloudReady) {
-      setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
+      toast({ type: 'warning', title: 'Configura Supabase', message: 'Faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY.' })
       return
     }
     if (!activeSlide) return
 
     try {
       setIsSaving(true)
-      setSaveStatus('Subiendo a la nube…')
+      toast({ type: 'info', title: 'Nube', message: 'Subiendo a la nube…', durationMs: 1400 })
       const uploaded = await cloudUpsertSlide(activeSlide)
       saveLocalSlide(uploaded)
-      setSaveStatus('Guardado en la nube.')
+      toast({ type: 'success', title: 'Nube', message: 'Guardado en la nube.' })
     } catch (e) {
-      setSaveStatus(`No se pudo guardar en la nube: ${e?.message || 'error'}`)
+      toast({ type: 'error', title: 'Nube', message: `No se pudo guardar en la nube: ${e?.message || 'error'}` })
     } finally {
       setIsSaving(false)
     }
@@ -133,17 +133,17 @@ export default function HotspotEditorPage() {
 
   async function cloudImportSlides() {
     if (!isEditor) {
-      setSaveStatus('No tienes permiso para usar la nube. Cambia tu rol a Editor en Perfil.')
+      toast({ type: 'warning', title: 'Sin permisos', message: 'No tienes permiso para usar la nube. Cambia tu rol a Editor en Perfil.' })
       return
     }
     if (!cloudReady) {
-      setSaveStatus('Configura Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
+      toast({ type: 'warning', title: 'Configura Supabase', message: 'Faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY.' })
       return
     }
 
     try {
       setIsSaving(true)
-      setSaveStatus('Importando desde la nube…')
+      toast({ type: 'info', title: 'Nube', message: 'Importando desde la nube…', durationMs: 1600 })
       const cloudSlides = await cloudListSlides()
       const raw = localStorage.getItem('microlab:local_slides')
       const prev = raw ? JSON.parse(raw) : []
@@ -153,10 +153,10 @@ export default function HotspotEditorPage() {
       for (const s of cloudSlides) map.set(s.id, s)
       const next = Array.from(map.values())
       localStorage.setItem('microlab:local_slides', JSON.stringify(next))
-      setSaveStatus('Importado. Recargando…')
+      toast({ type: 'success', title: 'Nube', message: 'Importado. Recargando…', durationMs: 1800 })
       window.location.reload()
     } catch (e) {
-      setSaveStatus(`No se pudo importar desde la nube: ${e?.message || 'error'}`)
+      toast({ type: 'error', title: 'Nube', message: `No se pudo importar desde la nube: ${e?.message || 'error'}` })
     } finally {
       setIsSaving(false)
     }
@@ -312,7 +312,7 @@ export default function HotspotEditorPage() {
     }
     saveLocalOverride(cleared)
     setDraft(null)
-    setSaveStatus('Reset: hotspots y descripción borrados.')
+    toast({ type: 'success', title: 'Reset', message: 'Hotspots y descripción borrados.' })
   }
 
   function addHotspotAt(x, y) {
@@ -352,7 +352,6 @@ export default function HotspotEditorPage() {
   useEffect(() => {
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
   }, [])
 
@@ -368,14 +367,14 @@ export default function HotspotEditorPage() {
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
-    setSaveStatus(`Descargado: ${filename}`)
+    toast({ type: 'success', title: 'Descarga', message: `Descargado: ${filename}` })
   }
 
   async function saveToFile() {
     if (!activeSlide) return
     const api = window.showSaveFilePicker
     if (!api) {
-      setSaveStatus('Tu navegador no soporta guardado directo. Usa Descargar.')
+      toast({ type: 'warning', title: 'No soportado', message: 'Tu navegador no soporta guardado directo. Usa Descargar.' })
       return
     }
 
@@ -392,9 +391,9 @@ export default function HotspotEditorPage() {
       const writable = await handle.createWritable()
       await writable.write(exportText)
       await writable.close()
-      setSaveStatus('Guardado en archivo seleccionado.')
+      toast({ type: 'success', title: 'Archivo', message: 'Guardado en archivo seleccionado.' })
     } catch {
-      setSaveStatus('Guardado cancelado o falló.')
+      toast({ type: 'error', title: 'Archivo', message: 'Guardado cancelado o falló.' })
     }
   }
 
@@ -531,19 +530,6 @@ export default function HotspotEditorPage() {
         onAddHotspot={addHotspotAt}
       />
 
-      {saveStatus ? (
-        <div className="fixed bottom-4 right-4 z-[200]">
-          <div
-            className={`max-w-[320px] rounded-2xl border px-4 py-3 text-sm font-semibold shadow-[0_20px_60px_-30px_rgba(0,0,0,0.9)] backdrop-blur-sm transition ${
-              saveStatus.startsWith('error:')
-                ? 'border-red-500/30 bg-red-500/15 text-red-100'
-                : 'border-emerald-500/30 bg-emerald-500/15 text-emerald-100'
-            }`}
-          >
-            {saveStatus.replace(/^error:/, '').replace(/^ok:/, '')}
-          </div>
-        </div>
-      ) : null}
     </div>
   )
 }
