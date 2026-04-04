@@ -16,7 +16,7 @@ function todayKey() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export default function HomePage() {
+export default function HomePage({ user = null }) {
   const [catalog, setCatalog] = useState(() => getCatalog())
   const [stats, setStats] = useState(() => safeParse(localStorage.getItem('microlab_stats'), { streak: 0, lastDay: null, opens: 0 }))
   const [unreadCount, setUnreadCount] = useState(() => listNotifications().filter((n) => !n.read).length)
@@ -73,6 +73,14 @@ export default function HomePage() {
   const lastRecent = recents[0] || null
   const openedToday = stats?.lastDay === todayKey()
 
+  const displayName = String(user?.user_metadata?.name || '').trim()
+  const greeting = useMemo(() => {
+    const h = new Date().getHours()
+    if (h >= 5 && h < 12) return 'Buenos días'
+    if (h >= 12 && h < 19) return 'Buenas tardes'
+    return 'Buenas noches'
+  }, [])
+
   return (
     <div className="grid gap-4">
       <style>{`
@@ -90,8 +98,13 @@ export default function HomePage() {
           animation: 'microlabHomeIn 180ms ease-out both'
         }}
       >
-        <div className="text-xs font-semibold tracking-[0.22em] text-slate-500">MICROLAB</div>
+        <div className="text-xs font-semibold tracking-[0.22em] text-slate-500">MEDHUB</div>
         <div className="mt-1 text-2xl font-extrabold text-white">Inicio</div>
+        {displayName ? (
+          <div className="mt-1 text-lg font-extrabold text-white">
+            {greeting}, {displayName}
+          </div>
+        ) : null}
         <div className="mt-2 text-sm font-semibold text-slate-300">
           {openedToday ? 'Hoy ya registraste actividad.' : 'Abre la app y haz un quiz corto para mantener tu racha.'}
         </div>

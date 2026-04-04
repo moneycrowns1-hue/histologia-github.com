@@ -504,7 +504,7 @@ export default function LibraryPage({ canEdit = false }) {
               difficulty: 1,
               description: '',
               imageUrl: saved.url,
-              thumbnailUrl: saved.url,
+              thumbnailUrl: saved.thumbUrl || saved.url,
               naturalSize: { width: 1, height: 1 },
               hotspots: []
             }

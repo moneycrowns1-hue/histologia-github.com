@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import App from './App.jsx'
 import { ToastProvider } from './toast/ToastProvider.jsx'
+import { isPerfEnabled, startPerfMonitoring } from './utils/perf.js'
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -17,3 +18,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
 const splash = document.getElementById('splash')
 if (splash) splash.style.display = 'none'
+
+if (isPerfEnabled()) {
+  startPerfMonitoring()
+}

@@ -68,7 +68,7 @@ export default function LoginPage() {
   return (
     <div className="-mx-4 -my-6 grid min-h-[100dvh] place-items-center bg-black px-4 py-10 text-white">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
-        <div className="text-2xl font-extrabold tracking-tight">MicroLab</div>
+        <div className="text-2xl font-extrabold tracking-tight">MedHub</div>
         <div className="mt-1 text-sm font-semibold text-slate-300">Inicia sesión para sincronizar tu biblioteca.</div>
 
         <div className="mt-5 grid gap-2">

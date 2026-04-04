@@ -81,15 +81,17 @@ export async function cloudGetUser() {
   return data?.user || null
 }
 
-export async function cloudUpdateProfile({ role }) {
+export async function cloudUpdateProfile({ role, name }) {
   if (!isSupabaseConfigured()) throw new Error('Supabase not configured')
   const supabase = getSupabase()
   if (!supabase) throw new Error('Supabase not configured')
 
   const nextRole = String(role || '').trim()
+  const nextName = String(name || '').trim()
   const { data, error } = await supabase.auth.updateUser({
     data: {
-      role: nextRole
+      role: nextRole,
+      name: nextName
     }
   })
   if (error) throw error
