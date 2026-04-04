@@ -21,6 +21,15 @@ export default function ViewerPage() {
   const slideId = searchParams.get('slide') || slides[0]?.id
   const slide = useMemo(() => slides.find((s) => s.id === slideId) || slides[0], [slides, slideId])
 
+  useEffect(() => {
+    if (!slides.length) return
+    const requested = searchParams.get('slide')
+    if (!requested) return
+    const found = slides.some((s) => s.id === requested)
+    if (found) return
+    setSearchParams({ slide: slides[0].id }, { replace: true })
+  }, [searchParams, setSearchParams, slides])
+
   const [mode, setMode] = useState('study')
 
   useEffect(() => {

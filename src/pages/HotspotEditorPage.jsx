@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import HotspotEditor from '../slides/HotspotEditor.jsx'
-import { slides } from '../slides/slides.js'
-import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
-import { getSavedImageBlob, idbUrlToKey, isIdbUrl, listSavedImages, saveImageFile } from '../utils/localImages.js'
+import { getSlides, subscribeSlides } from '../slides/slides.js'
+import { getSavedImageBlob, idbUrlToKey, isIdbUrl } from '../utils/localImages.js'
+import { useSearchParams } from 'react-router-dom'
 import {
   cloudIsReady,
   cloudGetUser,
@@ -19,38 +19,19 @@ function safeId(s) {
 }
 
 export default function HotspotEditorPage() {
-  const [localSlidesList, setLocalSlidesList] = useState(() => {
-    try {
-      const raw = localStorage.getItem('microlab:local_slides')
-      const arr = raw ? JSON.parse(raw) : []
-      return Array.isArray(arr) ? arr.filter((s) => s && typeof s === 'object' && typeof s.id === 'string') : []
-    } catch {
-      return []
-    }
-  })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [allSlides, setAllSlides] = useState(() => getSlides())
 
-  const allSlides = useMemo(() => {
-    const map = new Map()
-    for (const s of slides) map.set(s.id, s)
-    for (const s of localSlidesList) map.set(s.id, s)
-    return Array.from(map.values())
-  }, [localSlidesList])
-
-  const [slideId, setSlideId] = useState(allSlides[0]?.id)
+  const [slideId, setSlideId] = useState(() => searchParams.get('slide') || allSlides[0]?.id)
   const baseSlide = useMemo(() => allSlides.find((s) => s.id === slideId) || allSlides[0] || null, [allSlides, slideId])
 
   const [draft, setDraft] = useState(null)
   const [saveStatus, setSaveStatus] = useState('')
-  const [images, setImages] = useState([])
-  const [localImages, setLocalImages] = useState([])
   const [isSaving, setIsSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
 
   const [cloudReady, setCloudReady] = useState(false)
   const [isEditor, setIsEditor] = useState(false)
-
-  const fileInputRef = useRef(null)
-  const uploadModeRef = useRef('new')
 
   const autosaveTimerRef = useRef(null)
   const lastSavedTextRef = useRef('')
@@ -59,6 +40,12 @@ export default function HotspotEditorPage() {
 
   useEffect(() => {
     let alive = true
+
+    const unsubSlides = subscribeSlides(() => {
+      const next = getSlides()
+      if (!alive) return
+      setAllSlides(next)
+    })
 
     cloudIsReady()
       .then((ready) => {
@@ -81,42 +68,26 @@ export default function HotspotEditorPage() {
         setIsEditor(false)
       })
 
-    async function loadImages() {
-      try {
-        const res = await fetch('/__slides_manifest')
-        const data = await res.json()
-        if (!alive) return
-        setImages(Array.isArray(data?.images) ? data.images : [])
-      } catch {
-        if (!alive) return
-        setImages([])
-      }
-    }
-
-    async function loadLocalImages() {
-      try {
-        const items = await listSavedImages()
-        if (!alive) return
-        setLocalImages(items)
-      } catch {
-        if (!alive) return
-        setLocalImages([])
-      }
-    }
-
-    loadImages()
-    loadLocalImages()
-
-    if (import.meta.hot) {
-      import.meta.hot.on('microlab:slides-changed', () => {
-        loadImages()
-      })
-    }
-
     return () => {
       alive = false
+      unsubSlides?.()
     }
   }, [])
+
+  useEffect(() => {
+    const requested = searchParams.get('slide')
+    if (!requested) return
+    if (requested === slideId) return
+    setSlideId(requested)
+    setDraft(null)
+  }, [searchParams, slideId])
+
+  useEffect(() => {
+    if (!slideId) return
+    const current = searchParams.get('slide')
+    if (current === slideId) return
+    setSearchParams({ slide: slideId }, { replace: true })
+  }, [searchParams, setSearchParams, slideId])
 
   async function cloudUploadActive() {
     if (!isEditor) {
@@ -297,119 +268,18 @@ export default function HotspotEditorPage() {
     return null
   }
 
-  async function onUploadFiles(fileList) {
-    const files = Array.from(fileList || []).filter(Boolean)
-    if (!files.length) return
-
-    setSaveStatus('Subiendo imagen…')
-    try {
-      const file = files[0]
-      const saved = await saveImageFile(file)
-
-      setLocalImages(await listSavedImages())
-
-      if (uploadModeRef.current === 'replace') {
-        setSlideImages(saved.url)
-        try {
-          const current = draft && baseSlide && draft.id === baseSlide.id ? draft : baseSlide
-          if (current && typeof current.id === 'string') {
-            saveLocalSlide({
-              ...current,
-              imageUrl: saved.url,
-              thumbnailUrl: saved.url
-            })
-          }
-        } catch {
-          // ignore
-        }
-        setSaveStatus('Imagen reemplazada. Ahora puedes agregar hotspots.')
-        return
-      }
-
-      const nextId = `subida-${Date.now()}`
-      const nextSlide = {
-        id: nextId,
-        title: file.name?.replace(/\.[^.]+$/, '') || 'Nueva diapositiva',
-        topic: 'Subidas',
-        tags: [],
-        difficulty: 1,
-        description: '',
-        imageUrl: saved.url,
-        thumbnailUrl: saved.url,
-        naturalSize: { width: 1, height: 1 },
-        hotspots: []
-      }
-
-      saveLocalSlide(nextSlide)
-
-      setSlideId(nextSlide.id)
-      setDraft(nextSlide)
-      lastSavedTextRef.current = JSON.stringify(nextSlide, null, 2)
-      setIsDirty(false)
-      setSaveStatus('Imagen subida. Edita y agrega hotspots.')
-    } catch {
-      setSaveStatus('No se pudo subir la imagen (¿Safari con modo privado?)')
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = ''
+  function resetToEmpty() {
+    if (!baseSlide) return
+    const cleared = {
+      ...baseSlide,
+      title: baseSlide.title || '',
+      topic: baseSlide.topic || '',
+      description: '',
+      hotspots: []
     }
-  }
-
-  function ImageTile({ url, label, selected, onSelect }) {
-    const resolved = useResolvedImageUrl(url)
-
-    return (
-      <button
-        type="button"
-        onClick={onSelect}
-        className={`group overflow-hidden rounded-2xl border bg-slate-950/30 text-left transition hover:bg-slate-950/50 ${
-          selected ? 'border-emerald-400/60' : 'border-slate-800/60'
-        }`}
-      >
-        <div className="relative aspect-[16/10]">
-          {resolved ? (
-            <img src={resolved} alt={label} className="absolute inset-0 h-full w-full object-cover" draggable={false} loading="lazy" />
-          ) : (
-            <div className="absolute inset-0 animate-pulse bg-white/5" />
-          )}
-          <div className="absolute inset-x-0 bottom-0 h-[70%] bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 p-3">
-            <div className="text-xs font-semibold text-white line-clamp-2 drop-shadow-sm">{label}</div>
-          </div>
-        </div>
-      </button>
-    )
-  }
-
-  function setSlideImages(url) {
-    ensureDraft()
-
-    setDraft((prev) => {
-      const s = prev && baseSlide && prev.id === baseSlide.id ? prev : JSON.parse(JSON.stringify(baseSlide))
-      const next = {
-        ...s,
-        imageUrl: url,
-        thumbnailUrl: url
-      }
-      scheduleAutosave(next)
-      return next
-    })
-
-    ;(async () => {
-      const size = await getNaturalSize(url)
-      if (!size) return
-
-      setDraft((prev) => {
-        const s = prev && baseSlide && prev.id === baseSlide.id ? prev : JSON.parse(JSON.stringify(baseSlide))
-        const next = {
-          ...s,
-          imageUrl: url,
-          thumbnailUrl: url,
-          naturalSize: size
-        }
-        scheduleAutosave(next)
-        return next
-      })
-    })()
+    saveLocalOverride(cleared)
+    setDraft(null)
+    setSaveStatus('Reset: hotspots y descripción borrados.')
   }
 
   function addHotspotAt(x, y) {
@@ -521,92 +391,6 @@ export default function HotspotEditorPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={baseSlide.id}
-            onChange={(e) => {
-              setSlideId(e.target.value)
-              setDraft(null)
-            }}
-            className="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm"
-          >
-            {allSlides.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            onClick={() => {
-              ensureDraft()
-            }}
-            className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-          >
-            Editar
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => onUploadFiles(e.target.files)}
-          />
-
-          <button
-            type="button"
-            onClick={() => {
-              uploadModeRef.current = 'new'
-              fileInputRef.current?.click()
-            }}
-            className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400"
-          >
-            Subir (nueva)
-          </button>
-
-          <button
-            type="button"
-            disabled={!activeSlide || isSaving}
-            onClick={() => {
-              uploadModeRef.current = 'replace'
-              fileInputRef.current?.click()
-            }}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
-              !activeSlide || isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
-            }`}
-          >
-            Reemplazar imagen
-          </button>
-
-          {isEditor ? (
-            <>
-              <button
-                type="button"
-                disabled={!activeSlide || isSaving}
-                onClick={cloudUploadActive}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
-                  !activeSlide || isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
-                }`}
-                title={!cloudReady ? 'Configura Supabase en variables de entorno' : 'Subir diapositiva a Supabase'}
-              >
-                Nube: subir
-              </button>
-
-              <button
-                type="button"
-                disabled={isSaving}
-                onClick={cloudImportSlides}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 ${
-                  isSaving ? 'bg-slate-900/50 text-slate-500 ring-1 ring-slate-800' : 'bg-slate-800'
-                }`}
-                title={!cloudReady ? 'Configura Supabase en variables de entorno' : 'Importar tus diapositivas desde Supabase'}
-              >
-                Nube: importar
-              </button>
-            </>
-          ) : null}
-
           <button
             type="button"
             disabled={!activeSlide || isSaving || !isDirty}
@@ -638,7 +422,7 @@ export default function HotspotEditorPage() {
           <button
             type="button"
             onClick={() => {
-              setDraft(null)
+              resetToEmpty()
             }}
             className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
           >
@@ -704,58 +488,6 @@ export default function HotspotEditorPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="text-sm font-semibold">Imágenes</div>
-            <div className="text-xs text-slate-500">
-              Puedes usar imágenes de <code>public/slides</code> (solo en desarrollo) o subir desde tu iPad (se guardan en este dispositivo).
-            </div>
-          </div>
-          <div className="text-xs text-slate-500">
-            {isSaving ? 'Guardando…' : isDirty ? 'Cambios sin guardar' : 'Guardado'}
-          </div>
-        </div>
-
-        {localImages.length ? (
-          <div className="grid gap-2">
-            <div className="text-xs font-semibold text-slate-300">Subidas (este dispositivo)</div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {localImages.map((it) => (
-                <ImageTile
-                  key={it.key}
-                  url={it.url}
-                  label={it.name || it.url}
-                  selected={activeSlide?.imageUrl === it.url}
-                  onSelect={() => setSlideImages(it.url)}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {images.length > 0 ? (
-          <div className="grid gap-2">
-            <div className="text-xs font-semibold text-slate-300">public/slides (desarrollo)</div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {images.map((url) => (
-                <ImageTile
-                  key={url}
-                  url={url}
-                  label={url.replace('/slides/', '')}
-                  selected={activeSlide?.imageUrl === url}
-                  onSelect={() => setSlideImages(url)}
-                />
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm text-slate-300">
-            En GitHub Pages este listado no aparece. Usa <b>Subir imagen</b> para agregar desde el iPad.
-          </div>
-        )}
-      </div>
-
       <HotspotEditor
         slide={activeSlide}
         onChange={(next) => {
@@ -765,43 +497,7 @@ export default function HotspotEditorPage() {
         onAddHotspot={addHotspotAt}
       />
 
-      <div className="grid gap-2 rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-sm font-semibold">Exportar JSON</div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={copyExport}
-              className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400"
-            >
-              Copiar
-            </button>
-            <button
-              type="button"
-              onClick={downloadJSON}
-              className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-            >
-              Descargar
-            </button>
-            <button
-              type="button"
-              onClick={saveToFile}
-              className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-            >
-              Guardar en archivo
-            </button>
-          </div>
-        </div>
-        {saveStatus ? <div className="text-xs text-slate-500">{saveStatus}</div> : null}
-        <textarea
-          value={exportText}
-          readOnly
-          className="h-56 w-full resize-none rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-200"
-        />
-        <div className="text-xs text-slate-500">
-          Pega este objeto dentro de <code>src/slides/slides.js</code> (en el item correspondiente) para guardar los hotspots.
-        </div>
-      </div>
+      {saveStatus ? <div className="text-xs text-slate-500">{saveStatus}</div> : null}
     </div>
   )
 }

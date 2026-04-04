@@ -1,10 +1,53 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { getCatalog, subscribeSlides } from '../slides/slides.js'
 import useResolvedImageUrl from '../utils/useResolvedImageUrl.js'
+import { saveImageFile } from '../utils/localImages.js'
 
 function slideThumb(s) {
   return s.thumbnailUrl || s.imageUrl
+}
+
+function addDeletedId(id) {
+  try {
+    const key = 'microlab:deleted_slide_ids'
+    const raw = localStorage.getItem(key)
+    const arr = raw ? JSON.parse(raw) : []
+    const list = Array.isArray(arr) ? arr : []
+    if (!list.includes(id)) list.push(id)
+    localStorage.setItem(key, JSON.stringify(list))
+  } catch {
+    // ignore
+  }
+}
+
+function removeLocalSlideAndOverrides(id) {
+  try {
+    const raw = localStorage.getItem('microlab:local_slides')
+    const prev = raw ? JSON.parse(raw) : []
+    const arr = Array.isArray(prev) ? prev : []
+    const next = arr.filter((s) => s?.id !== id)
+    localStorage.setItem('microlab:local_slides', JSON.stringify(next))
+  } catch {
+    // ignore
+  }
+
+  try {
+    const raw = localStorage.getItem('microlab:overrides_local')
+    const prev = raw ? JSON.parse(raw) : {}
+    const obj = prev && typeof prev === 'object' ? prev : {}
+    if (obj[id]) delete obj[id]
+    localStorage.setItem('microlab:overrides_local', JSON.stringify(obj))
+  } catch {
+    // ignore
+  }
+
+  addDeletedId(id)
+  try {
+    window.dispatchEvent(new Event('microlab:slides-updated'))
+  } catch {
+    // ignore
+  }
 }
 
 function RecentStory({ slide, isFavorite }) {
@@ -109,7 +152,16 @@ function SlideCard({ slide, isFavorite, onToggleFavorite, priority = false }) {
 }
 
 export default function LibraryPage() {
+  const navigate = useNavigate()
   const [catalog, setCatalog] = useState(() => getCatalog())
+
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createTitle, setCreateTitle] = useState('')
+  const [createTopic, setCreateTopic] = useState('')
+  const [createBusy, setCreateBusy] = useState(false)
+  const createFileRef = useRef(null)
+
+  const [menuSlide, setMenuSlide] = useState(null)
 
   useEffect(() => {
     const unsub = subscribeSlides(() => {
@@ -300,7 +352,7 @@ export default function LibraryPage() {
           <div className="mt-0.5 text-[13px] font-semibold tracking-[0.22em] text-slate-400">HISTOLOGIA</div>
         </div>
 
-        <div className="mt-4 grid gap-2 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="mt-4 grid gap-2 md:grid-cols-[1fr_auto_auto] md:items-end">
           <div className="grid gap-2 sm:grid-cols-[1fr_240px]">
             <input
               value={query}
@@ -339,6 +391,18 @@ export default function LibraryPage() {
             </svg>
             Favoritos
           </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setCreateTitle('')
+              setCreateTopic('')
+              setCreateOpen(true)
+            }}
+            className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-500 px-4 text-[15px] font-extrabold text-emerald-950 transition active:scale-[0.99] hover:bg-emerald-400 md:h-12 md:text-base"
+          >
+            + Nueva diapositiva
+          </button>
         </div>
       </div>
 
@@ -366,7 +430,22 @@ export default function LibraryPage() {
 
             <div className="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-3 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(172px,1fr))]">
               {c.items.map((s) => (
-                <SlideCard key={s.id} slide={s} isFavorite={favorites.has(s.id)} onToggleFavorite={toggleFavorite} />
+                <div
+                  key={s.id}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setMenuSlide(s)
+                  }}
+                  onTouchStart={() => {
+                    // long press
+                    const t = setTimeout(() => setMenuSlide(s), 420)
+                    const clear = () => clearTimeout(t)
+                    window.addEventListener('touchend', clear, { once: true })
+                    window.addEventListener('touchmove', clear, { once: true })
+                  }}
+                >
+                  <SlideCard slide={s} isFavorite={favorites.has(s.id)} onToggleFavorite={toggleFavorite} />
+                </div>
               ))}
 
               {showOnlyFavorites && c.items.length === 0 ? (
@@ -384,6 +463,141 @@ export default function LibraryPage() {
           </div>
         )}
       </div>
+
+      <input
+        ref={createFileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={async (e) => {
+          const files = Array.from(e.target.files || []).filter(Boolean)
+          if (!files.length) return
+          const file = files[0]
+          try {
+            setCreateBusy(true)
+            const saved = await saveImageFile(file)
+            const id = `slide-${Date.now()}`
+            const slide = {
+              id,
+              title: (createTitle || file.name || 'Nueva diapositiva').replace(/\.[^.]+$/, ''),
+              topic: createTopic || 'Sin tema',
+              tags: [],
+              difficulty: 1,
+              description: '',
+              imageUrl: saved.url,
+              thumbnailUrl: saved.url,
+              naturalSize: { width: 1, height: 1 },
+              hotspots: []
+            }
+
+            try {
+              const raw = localStorage.getItem('microlab:local_slides')
+              const prev = raw ? JSON.parse(raw) : []
+              const arr = Array.isArray(prev) ? prev : []
+              const next = [...arr.filter((s) => s?.id !== slide.id), slide]
+              localStorage.setItem('microlab:local_slides', JSON.stringify(next))
+              window.dispatchEvent(new Event('microlab:slides-updated'))
+            } catch {
+              // ignore
+            }
+
+            setCreateOpen(false)
+            navigate(`/editor?slide=${encodeURIComponent(id)}`)
+          } catch {
+            // ignore
+          } finally {
+            setCreateBusy(false)
+            try {
+              if (createFileRef.current) createFileRef.current.value = ''
+            } catch {
+              // ignore
+            }
+          }
+        }}
+      />
+
+      {createOpen ? (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950 p-5 text-white shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
+            <div className="text-lg font-extrabold">Nueva diapositiva</div>
+            <div className="mt-4 grid gap-2">
+              <div className="text-xs font-semibold text-slate-400">Título</div>
+              <input
+                value={createTitle}
+                onChange={(e) => setCreateTitle(e.target.value)}
+                className="h-12 w-full rounded-2xl border border-white/10 bg-black px-4 text-base font-semibold text-white"
+                placeholder="Ej: Tejido conectivo"
+              />
+
+              <div className="mt-2 text-xs font-semibold text-slate-400">Sección (categoría)</div>
+              <input
+                value={createTopic}
+                onChange={(e) => setCreateTopic(e.target.value)}
+                className="h-12 w-full rounded-2xl border border-white/10 bg-black px-4 text-base font-semibold text-white"
+                placeholder="Ej: Tejidos"
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={createBusy}
+                onClick={() => createFileRef.current?.click()}
+                className={`h-12 flex-1 rounded-2xl px-4 text-base font-extrabold transition active:scale-[0.99] ${
+                  createBusy ? 'bg-white/10 text-slate-400' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400'
+                }`}
+              >
+                Elegir imagen
+              </button>
+              <button
+                type="button"
+                disabled={createBusy}
+                onClick={() => setCreateOpen(false)}
+                className="h-12 rounded-2xl bg-white/10 px-4 text-base font-extrabold text-white hover:bg-white/15"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {menuSlide ? (
+        <div className="fixed inset-0 z-[95] bg-black/70" onClick={() => setMenuSlide(null)}>
+          <div className="absolute inset-x-4 bottom-4 mx-auto max-w-md rounded-3xl border border-white/10 bg-slate-950 p-3 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
+            <div className="px-3 py-2 text-sm font-bold text-white truncate">{menuSlide.title}</div>
+            <button
+              type="button"
+              onClick={() => {
+                const id = menuSlide.id
+                setMenuSlide(null)
+                navigate(`/editor?slide=${encodeURIComponent(id)}`)
+              }}
+              className="w-full rounded-2xl px-3 py-3 text-left text-base font-extrabold text-white hover:bg-white/10"
+            >
+              Editar puntos
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const id = menuSlide.id
+                setMenuSlide(null)
+                removeLocalSlideAndOverrides(id)
+              }}
+              className="w-full rounded-2xl px-3 py-3 text-left text-base font-extrabold text-red-300 hover:bg-red-500/10"
+            >
+              Borrar
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuSlide(null)}
+              className="mt-1 w-full rounded-2xl bg-white/10 px-3 py-3 text-left text-base font-extrabold text-white hover:bg-white/15"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

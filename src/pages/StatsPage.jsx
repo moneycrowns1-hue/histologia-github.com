@@ -37,8 +37,8 @@ export default function StatsPage() {
   const progress = useMemo(() => loadProgress(), [])
   const perf = useMemo(() => computeCardStats(progress), [progress])
 
-  const global = progress.stats || { reviews: 0, correct: 0 }
-  const accuracy = global.reviews ? Math.round((global.correct / global.reviews) * 100) : 0
+  const global = progress.stats || { reviews: 0, qualitySum: 0 }
+  const avgQuality = global.reviews ? Math.round((global.qualitySum / global.reviews) * 10) / 10 : 0
 
   const dueCount = useMemo(() => {
     let n = 0
@@ -52,12 +52,13 @@ export default function StatsPage() {
   const hardest = useMemo(() => {
     const rows = cards
       .map((c) => {
-        const s = perf.get(c.id) || { reviews: 0, wrong: 0, lastAt: 0 }
-        const rate = s.reviews ? s.wrong / s.reviews : 0
-        return { id: c.id, title: c.correctAnswer, deck: c.deckTitle, reviews: s.reviews, wrong: s.wrong, rate, lastAt: s.lastAt }
+        const s = perf.get(c.id) || { reviews: 0, lapses: 0, qualitySum: 0, lastAt: 0 }
+        const rate = s.reviews ? (s.lapses || 0) / s.reviews : 0
+        const avgQ = s.reviews ? (s.qualitySum || 0) / s.reviews : 0
+        return { id: c.id, title: c.front, deck: c.deckTitle, reviews: s.reviews, lapses: s.lapses || 0, rate, avgQ, lastAt: s.lastAt }
       })
       .filter((r) => r.reviews > 0)
-      .sort((a, b) => (b.rate - a.rate) || (b.wrong - a.wrong) || (b.reviews - a.reviews))
+      .sort((a, b) => (b.rate - a.rate) || (b.lapses - a.lapses) || (b.reviews - a.reviews))
       .slice(0, 10)
 
     return rows
@@ -72,7 +73,8 @@ export default function StatsPage() {
     }
     const values = keys.map((k) => ({ day: k, count: counts.get(k) || 0 }))
     const max = values.reduce((m, v) => Math.max(m, v.count), 0)
-    return { values, max }
+    const total = values.reduce((s, v) => s + v.count, 0)
+    return { values, max, total }
   }, [progress.events])
 
   const byTag = useMemo(() => {
@@ -110,8 +112,8 @@ export default function StatsPage() {
                 <th className="py-2 pr-3">Estructura</th>
                 <th className="py-2 pr-3">Deck</th>
                 <th className="py-2 pr-3">Repasos</th>
-                <th className="py-2 pr-3">Errores</th>
-                <th className="py-2 pr-3">Error %</th>
+                <th className="py-2 pr-3">Lapses</th>
+                <th className="py-2 pr-3">Lapse %</th>
               </tr>
             </thead>
             <tbody>
@@ -131,7 +133,7 @@ export default function StatsPage() {
                     </td>
                     <td className="py-2 pr-3 text-slate-300">{r.deck}</td>
                     <td className="py-2 pr-3 text-slate-300">{r.reviews}</td>
-                    <td className="py-2 pr-3 text-slate-300">{r.wrong}</td>
+                    <td className="py-2 pr-3 text-slate-300">{r.lapses}</td>
                     <td className="py-2 pr-3 text-slate-300">{Math.round(r.rate * 100)}%</td>
                   </tr>
                 ))
@@ -142,7 +144,10 @@ export default function StatsPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">
-        <div className="text-sm font-semibold">Actividad (últimos 30 días)</div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div className="text-sm font-semibold">Actividad (últimos 30 días)</div>
+          <div className="text-xs text-slate-500">Total: {activity.total} repaso(s)</div>
+        </div>
         <div className="mt-3 grid grid-cols-10 gap-2 sm:grid-cols-15 md:grid-cols-30">
           {activity.values.map((v) => {
             const intensity = activity.max ? v.count / activity.max : 0
@@ -164,7 +169,7 @@ export default function StatsPage() {
             )
           })}
         </div>
-        <div className="mt-2 text-xs text-slate-500">Entre más verde, más repaso ese día.</div>
+        <div className="mt-2 text-xs text-slate-500">Entre más verde, más repasos ese día. Pasa el cursor/mantén presionado para ver el número exacto.</div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -173,8 +178,8 @@ export default function StatsPage() {
           <div className="mt-1 text-2xl font-semibold">{global.reviews || 0}</div>
         </div>
         <div className="rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">
-          <div className="text-xs text-slate-500">Precisión</div>
-          <div className="mt-1 text-2xl font-semibold">{accuracy}%</div>
+          <div className="text-xs text-slate-500">Calidad prom.</div>
+          <div className="mt-1 text-2xl font-semibold">{avgQuality} / 5</div>
         </div>
         <div className="rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">
           <div className="text-xs text-slate-500">Vencidas hoy</div>

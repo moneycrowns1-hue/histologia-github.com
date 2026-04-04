@@ -26,11 +26,34 @@ function getLocalSlides() {
   }
 }
 
+function getDeletedSlideIds() {
+  try {
+    if (typeof window === 'undefined') return new Set()
+    const raw = window.localStorage.getItem('microlab:deleted_slide_ids')
+    const parsed = raw ? JSON.parse(raw) : []
+    const arr = Array.isArray(parsed) ? parsed : []
+    return new Set(arr.filter((x) => typeof x === 'string'))
+  } catch {
+    return new Set()
+  }
+}
+
 function applyOverrides(item, localOverrides) {
   const o = overrides?.[item.id]
   const lo = localOverrides?.[item.id]
-  if (!o && !lo) return item
-  return { ...item, ...(o || {}), ...(lo || {}) }
+  const merged = !o && !lo ? item : { ...item, ...(o || {}), ...(lo || {}) }
+  return {
+    ...merged,
+    imageUrl: normalizeSlideUrl(merged.imageUrl),
+    thumbnailUrl: normalizeSlideUrl(merged.thumbnailUrl)
+  }
+}
+
+function normalizeSlideUrl(url) {
+  const u = String(url || '')
+  if (!u) return u
+  if (u.startsWith('/slides/')) return u.slice(1)
+  return u
 }
 
 function safeId(s) {
@@ -45,9 +68,7 @@ function getGroupFromTopic(topic) {
   const t = String(topic || '').trim()
   if (!t) return { id: 'sin-tema', title: 'Sin tema' }
 
-  const parts = t.split('·').map((p) => p.trim()).filter(Boolean)
-  const groupTitle = parts[1] || parts[0] || 'Sin tema'
-  return { id: safeId(groupTitle), title: groupTitle }
+  return { id: safeId(t), title: t }
 }
 
 function buildCatalog(slidesList) {
@@ -66,113 +87,64 @@ const baseSlides = [
   {
     id: 'epitelio-simple-demo',
     title: 'Epitelio simple (demo)',
-    topic: 'Tejidos · Epitelial',
-    tags: ['epitelial', 'tejidos', 'básico'],
+    topic: 'Tejidos',
+    tags: ['tejidos', 'básico'],
     difficulty: 1,
-    description: 'Diapositiva de ejemplo con hotspots. Reemplaza esta imagen por una real en public/slides.',
-    imageUrl: '/slides/placeholder.svg',
-    thumbnailUrl: '/slides/placeholder.svg',
+    description: '',
+    imageUrl: 'slides/placeholder.svg',
+    thumbnailUrl: 'slides/placeholder.svg',
     naturalSize: { width: 1600, height: 900 },
-    hotspots: [
-      {
-        id: 'hs-nucleo',
-        x: 0.28,
-        y: 0.42,
-        name: 'Núcleo',
-        description: 'Estructura que contiene el material genético.',
-        function: 'Regula la expresión génica y la división celular.'
-      },
-      {
-        id: 'hs-epitelio',
-        x: 0.62,
-        y: 0.58,
-        name: 'Capa epitelial',
-        description: 'Conjunto de células que recubre una superficie.',
-        function: 'Protección, absorción y secreción (según el tipo de epitelio).'
-      }
-    ]
+    hotspots: []
   },
   {
     id: 'conectivo-laxo-demo',
     title: 'Conectivo laxo (demo)',
-    topic: 'Tejidos · Conectivo',
-    tags: ['conectivo', 'tejidos', 'básico'],
+    topic: 'Tejidos',
+    tags: ['tejidos', 'básico'],
     difficulty: 1,
-    description: 'Plantilla para practicar identificación de fibras y células en conectivo.',
-    imageUrl: '/slides/placeholder.svg',
-    thumbnailUrl: '/slides/placeholder.svg',
+    description: '',
+    imageUrl: 'slides/placeholder.svg',
+    thumbnailUrl: 'slides/placeholder.svg',
     naturalSize: { width: 1600, height: 900 },
-    hotspots: [
-      {
-        id: 'hs-fibra',
-        x: 0.4,
-        y: 0.62,
-        name: 'Fibras (ejemplo)',
-        description: 'Elementos del tejido conectivo que aportan soporte.',
-        function: 'Resistencia mecánica y estructura del estroma.'
-      },
-      {
-        id: 'hs-celula',
-        x: 0.68,
-        y: 0.35,
-        name: 'Célula (ejemplo)',
-        description: 'Célula del conectivo (p. ej. fibroblasto) en este demo.',
-        function: 'Síntesis y mantenimiento de matriz extracelular.'
-      }
-    ]
+    hotspots: []
   },
   {
     id: 'musculo-estriado-demo',
     title: 'Músculo estriado (demo)',
-    topic: 'Tejidos · Muscular',
-    tags: ['muscular', 'tejidos', 'básico'],
+    topic: 'Tejidos',
+    tags: ['tejidos', 'básico'],
     difficulty: 1,
-    description: 'Plantilla para practicar bandas, fibras y núcleos periféricos.',
-    imageUrl: '/slides/placeholder.svg',
-    thumbnailUrl: '/slides/placeholder.svg',
+    description: '',
+    imageUrl: 'slides/placeholder.svg',
+    thumbnailUrl: 'slides/placeholder.svg',
     naturalSize: { width: 1600, height: 900 },
-    hotspots: [
-      {
-        id: 'hs-bandas',
-        x: 0.52,
-        y: 0.52,
-        name: 'Bandas (ejemplo)',
-        description: 'Patrón repetitivo característico del músculo estriado.',
-        function: 'Organización sarcomérica asociada a contracción.'
-      }
-    ]
+    hotspots: []
   },
   {
     id: 'neurona-demo',
     title: 'Neurona (demo)',
-    topic: 'Tejidos · Nervioso',
-    tags: ['nervioso', 'tejidos', 'básico'],
+    topic: 'Tejidos',
+    tags: ['tejidos', 'básico'],
     difficulty: 1,
-    description: 'Plantilla para practicar soma, núcleo y prolongaciones.',
-    imageUrl: '/slides/placeholder.svg',
-    thumbnailUrl: '/slides/placeholder.svg',
+    description: '',
+    imageUrl: 'slides/placeholder.svg',
+    thumbnailUrl: 'slides/placeholder.svg',
     naturalSize: { width: 1600, height: 900 },
-    hotspots: [
-      {
-        id: 'hs-soma',
-        x: 0.33,
-        y: 0.48,
-        name: 'Soma (ejemplo)',
-        description: 'Cuerpo celular de la neurona.',
-        function: 'Integra señales y mantiene el metabolismo celular.'
-      }
-    ]
+    hotspots: []
   }
 ]
 
 export function getSlides() {
   const localOverrides = getLocalOverrides()
   const localSlides = getLocalSlides()
+  const deleted = getDeletedSlideIds()
 
   const map = new Map()
   for (const s of baseSlides) map.set(s.id, s)
   for (const s of localSlides) map.set(s.id, s)
-  return Array.from(map.values()).map((s) => applyOverrides(s, localOverrides))
+  return Array.from(map.values())
+    .filter((s) => !deleted.has(s.id))
+    .map((s) => applyOverrides(s, localOverrides))
 }
 
 export function getCatalog() {

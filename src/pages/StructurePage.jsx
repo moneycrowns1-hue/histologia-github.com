@@ -30,16 +30,19 @@ export default function StructurePage() {
   }, [progress.events, card])
 
   const summary = useMemo(() => {
-    if (!card) return { reviews: 0, wrong: 0, accuracy: 0 }
+    if (!card) return { reviews: 0, lapses: 0, avgQuality: 0 }
     let reviews = 0
-    let wrong = 0
+    let lapses = 0
+    let qualitySum = 0
     for (const e of progress.events || []) {
       if (e.cardId !== card.id) continue
       reviews += 1
-      if (!e.correct) wrong += 1
+      const q = Math.max(0, Math.min(5, Number(e.quality)))
+      qualitySum += Number.isFinite(q) ? q : 0
+      if (q < 3) lapses += 1
     }
-    const accuracy = reviews ? Math.round(((reviews - wrong) / reviews) * 100) : 0
-    return { reviews, wrong, accuracy }
+    const avgQuality = reviews ? Math.round((qualitySum / reviews) * 10) / 10 : 0
+    return { reviews, lapses, avgQuality }
   }, [progress.events, card])
 
   if (!card) {
@@ -60,7 +63,7 @@ export default function StructurePage() {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-lg font-semibold">{card.correctAnswer}</div>
+          <div className="text-lg font-semibold">{card.front}</div>
           <div className="text-sm text-slate-400">Deck: {card.deckTitle}</div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -82,8 +85,8 @@ export default function StructurePage() {
           <div className="mt-1 text-2xl font-semibold">{summary.reviews}</div>
         </div>
         <div className="rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">
-          <div className="text-xs text-slate-500">Precisión</div>
-          <div className="mt-1 text-2xl font-semibold">{summary.accuracy}%</div>
+          <div className="text-xs text-slate-500">Calidad prom.</div>
+          <div className="mt-1 text-2xl font-semibold">{summary.avgQuality} / 5</div>
         </div>
         <div className="rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">
           <div className="text-xs text-slate-500">Vencimiento</div>
@@ -95,7 +98,7 @@ export default function StructurePage() {
 
       <div className="rounded-2xl border border-slate-800/60 bg-slate-900/20 p-4">
         <div className="text-sm font-semibold">Explicación</div>
-        <div className="mt-2 text-sm text-slate-300">{card.explainCorrect}</div>
+        <div className="mt-2 whitespace-pre-wrap text-sm text-slate-300">{card.back}</div>
         <div className="mt-2 text-xs text-slate-500">Tags: {(card.tags || []).join(', ') || '—'}</div>
       </div>
 
@@ -106,16 +109,13 @@ export default function StructurePage() {
             <thead className="text-xs text-slate-500">
               <tr>
                 <th className="py-2 pr-3">Fecha</th>
-                <th className="py-2 pr-3">Elegida</th>
-                <th className="py-2 pr-3">Correcta</th>
-                <th className="py-2 pr-3">Resultado</th>
                 <th className="py-2 pr-3">Calidad</th>
               </tr>
             </thead>
             <tbody>
               {events.length === 0 ? (
                 <tr className="border-t border-slate-800/60">
-                  <td className="py-2 pr-3 text-slate-300" colSpan={5}>
+                  <td className="py-2 pr-3 text-slate-300" colSpan={2}>
                     Sin eventos todavía.
                   </td>
                 </tr>
@@ -123,9 +123,6 @@ export default function StructurePage() {
                 events.map((e, idx) => (
                   <tr key={idx} className="border-t border-slate-800/60">
                     <td className="py-2 pr-3 text-slate-300">{fmtDate(e.at)}</td>
-                    <td className="py-2 pr-3 text-slate-300">{e.picked || '—'}</td>
-                    <td className="py-2 pr-3 text-slate-300">{e.correctAnswer || '—'}</td>
-                    <td className={`py-2 pr-3 ${e.correct ? 'text-emerald-300' : 'text-rose-300'}`}>{e.correct ? 'OK' : 'Error'}</td>
                     <td className="py-2 pr-3 text-slate-300">{e.quality}</td>
                   </tr>
                 ))

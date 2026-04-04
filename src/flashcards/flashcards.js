@@ -8,15 +8,16 @@ function fromHotspots() {
   for (const s of slides) {
     const slideTags = s.tags || []
     for (const h of s.hotspots) {
+      const desc = String(h.description || '').trim()
+      const fn = String(h.function || '').trim()
+      const backParts = [desc, fn ? `Función: ${fn}` : ''].filter(Boolean)
       cards.push({
         id: `card-${s.id}-${h.id}`,
         deckId: s.id,
         deckTitle: s.title,
         tags: [...slideTags],
-        prompt: `¿Cuál estructura corresponde a: ${h.name}?`,
-        correctAnswer: h.name,
-        explainCorrect: `${h.name}: ${h.description} Función: ${h.function}`,
-        explainIncorrect: 'La selección no corresponde con la estructura indicada. Revisa la forma, ubicación relativa y función típica en la diapositiva.',
+        front: String(h.name || '').trim() || 'Estructura',
+        back: backParts.join('\n\n') || 'Sin descripción todavía.',
         source: { slideId: s.id, hotspotId: h.id }
       })
     }
