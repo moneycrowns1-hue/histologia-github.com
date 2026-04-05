@@ -61,20 +61,22 @@ function RecentStory({ slide, isFavorite }) {
     >
       <div className="relative">
         <div
-          className={`grid h-[56px] w-[56px] place-items-center rounded-full bg-gradient-to-tr from-fuchsia-500 via-cyan-400 to-emerald-400 p-[2px] transition group-active:scale-[0.98] md:h-[62px] md:w-[62px] ${
+          className={`grid h-[56px] w-[56px] place-items-center rounded-full bg-white/85 p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.10)] transition group-active:scale-[0.98] md:h-[62px] md:w-[62px] ${
             isFavorite ? 'opacity-100' : 'opacity-90'
           }`}
         >
-          <div className="relative h-full w-full overflow-hidden rounded-full bg-black">
-            {!loaded ? <div className="absolute inset-0 animate-pulse bg-white/5" /> : null}
-            <img
-              src={thumb}
-              alt={slide.title}
-              className={`h-full w-full object-cover transition duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-              loading="lazy"
-              onLoad={() => setLoaded(true)}
-              draggable={false}
-            />
+          <div className="grid h-full w-full place-items-center rounded-full bg-black p-[3px]">
+            <div className="relative h-full w-full overflow-hidden rounded-full bg-black">
+              {!loaded ? <div className="absolute inset-0 animate-pulse bg-white/5" /> : null}
+              <img
+                src={thumb}
+                alt={slide.title}
+                className={`h-full w-full object-cover transition duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+                loading="lazy"
+                onLoad={() => setLoaded(true)}
+                draggable={false}
+              />
+            </div>
           </div>
         </div>
       </div>

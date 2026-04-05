@@ -292,12 +292,6 @@ export default function App() {
         </Routes>
       </main>
 
-      <footer className="border-t border-slate-800/60">
-        <div className="mx-auto max-w-6xl px-4 py-4 text-xs text-slate-500">
-          Hecho para estudio. Puedes cargar tus propias imágenes en alta resolución en la carpeta <code>public/slides</code>.
-        </div>
-      </footer>
-
       {profileSetupOpen ? (
         <div className="fixed inset-0 z-[210] grid place-items-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950 p-5 text-white shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
